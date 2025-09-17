@@ -1,0 +1,9 @@
+{% extends "landing/base.html" %}
+{% block title %}Abgemeldet – Memorytrainer{% endblock %}
+{% block content %}
+<section class="panel" style="max-width:520px;margin:0 auto">
+  <h1 class="title">Abgemeldet</h1>
+  <p class="lead">Du wurdest erfolgreich abgemeldet.</p>
+  <p><a class="btn" href="{% url 'login' %}">Erneut anmelden</a></p>
+</section>
+{% endblock %}

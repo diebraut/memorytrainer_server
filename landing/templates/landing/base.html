@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de">
+<head>
+  {% load static %}
+  <meta charset="utf-8" />
+  <title>{% block title %}Memorytrainer{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f172a" />
+  <!-- App-Icon -->
+  <link rel="icon" href="{% static 'assets/memorytrainer-icon.png' %}">
+  <style>
+    :root{
+      --bg:#0f172a;--panel:#111827;--text:#e5e7eb;--muted:#94a3b8;--border:#1f2937;--accent:#38bdf8;--accent2:#22d3ee;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{text-decoration:underline}
+    .wrap{max-width:1100px;margin:0 auto;padding:24px}
+    .nav{display:flex;align-items:center;gap:14px;padding:14px 0}
+    .nav .spacer{flex:1}
+    .logo{display:flex;align-items:center;gap:10px}
+    .logo img{width:32px;height:32px;border-radius:8px;border:1px solid var(--border)}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--border);border-radius:10px;background:#0b1220;color:var(--text);cursor:pointer}
+    .btn:hover{border-color:var(--accent)}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px}
+    footer{opacity:.7;margin:40px 0}
+    h1.title{margin:0 0 8px;font-size:clamp(24px,3vw,40px);font-weight:800;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+    p.lead{color:var(--muted);margin:0 0 22px}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+    .cards .card{background:#0b1220;border:1px dashed var(--border);border-radius:14px;padding:14px}
+    .grid{display:grid;gap:16px;grid-template-columns:1.2fr 1fr}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav">
+      <div class="logo">
+        <img src="{% static 'assets/memorytrainer-icon.png' %}" alt="Memorytrainer">
+        <strong>Memorytrainer</strong>
+      </div>
+      <div class="spacer"></div>
+      <a class="btn" href="{% url 'landing:index' %}">Start</a>
+      <a class="btn" href="{% url 'landing:pakete' %}">Pakete</a>
+      <a class="btn" href="{% url 'login' %}">Login</a>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <footer class="panel">
+      <small>© {% now "Y" %} Memorytrainer • iOS verfügbar • Android in Planung</small>
+    </footer>
+  </div>
+</body>
+</html>

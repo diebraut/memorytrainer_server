@@ -1,0 +1,234 @@
+/* Allgemeine Stile für die gesamte Seite */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+}
+
+/* Überschrift */
+h1 {
+    text-align: center;
+    color: #333;
+    padding: 20px;
+}
+
+/* Container für den Tree-View */
+.tree-container {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    height: 100%;
+    overflow-x: auto;
+    padding: 10px 0;
+}
+
+/* Stile für jedes Panel */
+.tree-panel {
+    border-left: 1px solid #ccc;
+    border-right: 1px solid #ccc;
+    border-top: 2px solid #ccc;
+    border-bottom: 2px solid #ccc;
+    padding: 10px;
+    position: relative;
+    background: white;
+    box-sizing: border-box;
+    min-width: 250px;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Liste in jedem Panel */
+.tree-panel ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    flex-grow: 1;
+}
+
+/* Einzelne Listenelemente */
+.tree-panel li {
+    display: flex;
+    align-items: center;
+    padding: 5px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-bottom: 1px solid #ddd;
+    position: relative; /* Damit die Pfeile am rechten Rand fixiert werden können */
+}
+
+/* Sicherstellen, dass der Text immer linksbündig bleibt */
+.tree-panel li span {
+    text-align: left;
+    flex-grow: 1;
+}
+
+/* Hover-Effekt für Listenelemente */
+.tree-panel li:hover {
+    background-color: #f0f0f0;
+}
+
+/* Markiertes Element */
+.tree-panel li.selected {
+    background-color: #007BFF;
+    color: white;
+    font-weight: bold;
+    padding: 5px 8px;
+    border-radius: 4px;
+    margin-left: 8px; /* Gleicher Abstand wie rechts */
+    margin-right: 8px; /* Abstand für Gleichmäßigkeit */
+}
+
+/* Stile für das Icon in selektierten Elementen */
+.tree-panel li.selected .knowledge-icon {
+    filter: brightness(0) invert(1); /* Icon in Weiß darstellen */
+}
+
+/* Stile für den Pfeil in selektierten Elementen */
+.tree-panel li.selected .expand-icon {
+    color: white; /* Weiße Pfeilfarbe */
+}
+
+/* WebP-Icon für Wissensgebiete (bleibt links) */
+.knowledge-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* Pfeil-Icon (▶ / ▼) immer exakt am rechten Rand positionieren */
+.expand-icon {
+    position: absolute;
+    right: 8px; /* Abstand zum rechten Rand */
+    top: 50%;
+    transform: translateY(-50%); /* Zentriert den Pfeil vertikal */
+    color: #007BFF;
+    font-weight: bold;
+    transition: transform 0.2s ease-in-out;
+}
+
+/* Entfernt den unteren Rahmen des letzten Listenelements */
+.tree-panel li:last-child {
+    border-bottom: none;
+}
+
+/* Stile für ExercisePackage-Elemente */
+.tree-panel li[data-type="exercise-package"] {
+    background-color: #e0f7fa; /* Hellblauer Hintergrund für ExercisePackages */
+    display: flex;
+    align-items: center; /* Zentriert den Inhalt vertikal */
+    padding-left: 30px; /* Einrückung für das Icon */
+}
+
+.tree-panel li[data-type="exercise-package"]:hover {
+    background-color: #b2ebf2; /* Dunklerer Blauton beim Hover */
+}
+
+/* Stile für selektierte Exercise Packages */
+.tree-panel li[data-type="exercise-package"].selected {
+    background-color: #007BFF; /* Blaue Hintergrundfarbe */
+    color: white; /* Weiße Schrift */
+    font-weight: bold; /* Fettgedruckter Text */
+    padding: 5px 8px; /* Innenabstand */
+    border-radius: 4px; /* Abgerundete Ecken */
+    margin-left: 8px; /* Gleicher Abstand wie rechts */
+    margin-right: 8px; /* Abstand für Gleichmäßigkeit */
+}
+
+/* Stile für das Icon in selektierten Exercise Packages */
+.tree-panel li[data-type="exercise-package"].selected .knowledge-icon {
+    filter: brightness(0) invert(1); /* Icon in Weiß darstellen */
+}
+
+/* Resize-Handle */
+.resize-handle {
+    position: absolute;
+    right: -8px; /* Passt die Position an, um die Ränder zu überdecken */
+    top: -2px;
+    width: 16px; /* Breite des Balkens */
+    height: calc(100% + 2px);
+    cursor: ew-resize;
+    background-color: rgba(0, 123, 255, 0.5); /* Sichtbarer Hintergrund */
+    z-index: 10; /* Über anderen Elementen */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Stelle sicher, dass das Icon IM BALKEN bleibt */
+.resize-handle::after {
+    content: '↔';
+    font-size: 18px;
+    color: #007BFF;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.left-resize-handle {
+    left: -5px;
+}
+
+.right-resize-handle {
+    right: -5px;
+}
+
+/* Detail-Panel */
+.detail-panel {
+    position: relative;
+    border-top: 2px solid #ccc;
+    border-bottom: 2px solid #ccc;
+    background-color: #e4e6d5;
+    min-width: 300px; /* Minimale Breite des Panels */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Verteilt den Inhalt zwischen oben und unten */
+    padding: 10px;
+}
+
+.detail-content {
+    flex-grow: 1; /* Nimmt den verfügbaren Platz ein */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Titel oben, Datumszeilen unten */
+}
+
+.package-title {
+    margin-top: 1px; /* Nur 5px Abstand vom oberen Rand */
+    margin-bottom: 1px; /* Abstand zwischen Titel und Beschreibung */
+}
+
+.package-description {
+    margin-top: -15px;
+    margin-bottom: 10px; /* Abstand zwischen Beschreibung und Datumszeilen */
+}
+
+.date-container {
+    display: flex;
+    align-items: flex-end; /* Ausrichtung am unteren Rand */
+    gap: 10px; /* Abstand zwischen den Blöcken */
+    margin-bottom: -5px; /* 5px Abstand vom unteren Rand */
+}
+
+.date-labels, .date-values {
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Abstand zwischen den Datumszeilen */
+}
+
+.date-label, .date-value {
+    margin: 0;
+    text-align: left; /* Linksbündige Ausrichtung */
+    font-size: 0.8em; /* Etwas kleiner als der Standardtext */
+}
+
+.date-label {
+    font-weight: bold; /* Fett (bold) darstellen */
+}

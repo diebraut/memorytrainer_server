@@ -1,0 +1,40 @@
+{% extends "landing/base.html" %}
+{% load static %}
+{% block title %}Memorytrainer – Lerne smarter, erinnere länger{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <h1 class="title">Dein persönlicher Memorytrainer</h1>
+    <p class="lead">
+      Stärke dein Erinnerungsvermögen mit strukturierten Übungspaketen, die du flexibel kombinieren
+      und in kleinere Lerneinheiten aufteilen kannst.
+    </p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a class="btn" href="https://apps.apple.com/" target="_blank" rel="noreferrer">iOS-App öffnen</a>
+      <a class="btn" href="{% url 'landing:pakete' %}">Pakete ansehen</a>
+      <a class="btn" href="{% url 'login' %}">Personalisieren (Login)</a>
+    </div>
+  </section>
+
+  <div style="height:12px"></div>
+
+  <section class="grid">
+    <div class="panel">
+      <h2 style="margin-top:0">Warum Memorytrainer?</h2>
+      <ul>
+        <li>Der Trainer stärkt gezielt dein <strong>Erinnerungsvermögen</strong>.</li>
+        <li><strong>Zahlreiche Übungspakete</strong> aus vielen Themenbereichen.</li>
+        <li>Pakete in <strong>wählbar kleine Einheiten</strong> teilen – nacheinander aktivieren und sukzessive erweitern, bis die komplette Übung sitzt.</li>
+        <li>Übungen <strong>beliebig kombinieren</strong> – stell dir dein perfektes Training zusammen.</li>
+        <li>Aus Übungen <strong>neue Übungspakete</strong> generieren – flexibel und personalisiert.</li>
+        <li>Direkte <strong>Wissenslinks</strong> (z. B. Wikipedia) aus vielen Übungen – für vertiefende Infos.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h2 style="margin-top:0">Verfügbarkeit</h2>
+      <p>Die App ist aktuell für <strong>iOS</strong> verfügbar.</p>
+      <p>Auf der Startseite findest du den Hinweis und Link zum Store. Android ist in Planung.</p>
+      <img src="{% static 'img/app-icon.png' %}" alt="App-Icon" style="width:96px;height:96px;border-radius:20px;border:1px solid var(--border)">
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,215 @@
+{% extends "landing/base.html" %}
+{% load static %}
+{% block title %}Pakete – Memorytrainer{% endblock %}
+
+{% block head %}
+<style>
+  .examples{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .examples .card{background:#0b1220;border:1px dashed var(--border);border-radius:14px;padding:14px}
+  .tree{list-style:none;padding-left:0;margin:0}
+  .tree li{padding:6px 0;border-bottom:1px dashed var(--border)}
+  .child{margin-left:22px;padding-left:12px;border-left:1px dashed var(--border)}
+  .toggle{border:1px solid var(--border);background:#0b1220;border-radius:6px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;margin-right:8px}
+  .meta{color:var(--muted);font-size:12px;margin-left:8px}
+  .pkg{background:#0b1220;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px}
+  .pkg .meta{display:block;margin-top:6px}
+</style>
+{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <h1 class="title">Pakete</h1>
+    <p class="lead">Hier findest du die verfügbaren Übungspakete. Unten kannst du per Knowledge-Tree thematisch navigieren.</p>
+
+    <!-- Beispiele (wie gewünscht beibehalten) -->
+    <div class="examples" aria-label="Beispiele">
+      <div class="card"><h3>Gezieltes Training</h3><p>Einheiten nacheinander aktivieren – bis die ganze Übung sitzt.</p></div>
+      <div class="card"><h3>Flexibel kombinieren</h3><p>Übungen lassen sich beliebig zu neuen Paketen kombinieren.</p></div>
+      <div class="card"><h3>Wissenslinks</h3><p>Viele Übungen verlinken direkt zu vertiefenden Webseiten.</p></div>
+    </div>
+  </section>
+
+  <div style="height:14px"></div>
+
+  <section class="panel">
+    <h2 style="margin-top:0">Knowledge-Tree</h2>
+    <p class="lead" style="margin-bottom:14px">Wähle eine Kategorie/Unterkategorie, um die passenden Pakete zu sehen.</p>
+
+    <div style="display:grid;gap:16px;grid-template-columns:1fr 1.2fr">
+      <div>
+        <div id="tree-status" class="lead">Lade Kategorien …</div>
+        <ul id="tree" class="tree" aria-describedby="tree-status"></ul>
+      </div>
+
+      <div>
+        <h3 style="margin:0 0 8px">Pakete</h3>
+        <div id="pkg-empty" class="lead" style="color:var(--muted)">Bitte wähle links eine <strong>Unterkategorie</strong>.</div>
+        <div id="pkg-loading" class="lead" hidden>Lade Pakete …</div>
+        <div id="pkg-error" style="color:#ef4444" hidden></div>
+        <div id="pkg-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+  (function(){
+    const API = {
+      categories: () => "/api/categories/",
+      subcategories: id => `/api/get_subcategories/${id}/`,
+      details: (cat, sub) => `/api/get_details/${cat}/${sub}/`,
+      pkg: id => `/api/package/${id}/`,
+    };
+
+    const $ = sel => document.querySelector(sel);
+    const tree = $("#tree"), status = $("#tree-status");
+    const pkgEmpty = $("#pkg-empty"), pkgLoading=$("#pkg-loading"), pkgError=$("#pkg-error"), pkgList=$("#pkg-list");
+    const cache = { subs:new Map(), pkgs:new Map(), detail:new Map() };
+
+    function h(tag, attrs={}, ...kids){
+      const n = document.createElement(tag);
+      for(const [k,v] of Object.entries(attrs)){
+        if (v==null || v===false) continue;
+        if (k==="class") n.className=v;
+        else if (k.startsWith("on") && typeof v==="function") n.addEventListener(k.slice(2),v);
+        else n.setAttribute(k, v===true ? "" : String(v));
+      }
+      kids.flat().forEach(k => n.appendChild(typeof k==="string"?document.createTextNode(k):k));
+      return n;
+    }
+
+    function line(label, meta, onClick){
+      const t = h("button",{class:"toggle",type:"button"},"▶");
+      const name = h("button",{class:"btn",type:"button",style:"padding:6px 10px"},label);
+      const m = h("span",{class:"meta"},meta||"");
+      const row = h("div",{}, t, name, m);
+      if (onClick) name.addEventListener("click", onClick);
+      return {row,toggle:t,name,rowWrap:row};
+    }
+
+    async function loadCategories(){
+      try{
+        const r = await fetch(API.categories());
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        status.textContent = `${data.length} Hauptkategorien`;
+        tree.innerHTML = "";
+        data.forEach(cat => tree.appendChild(renderCategory(cat)));
+      }catch(e){
+        status.textContent = `Fehler: ${e.message}`;
+      }
+    }
+
+    function renderCategory(cat){
+      const {row,toggle} = line(cat.name, `${cat.pkg_count||0} Paket${(cat.pkg_count==1)?"":"e"}`);
+      const children = h("ul",{class:"child",hidden:true});
+      const li = h("li",{}, row, children);
+      if ((cat.children_count||0) > 0){
+        toggle.addEventListener("click", async ()=>{
+          const open = toggle.textContent==="▼";
+          toggle.textContent = open ? "▶" : "▼";
+          children.hidden = open;
+          if (!open && !children.hasChildNodes()){
+            await loadSubcats(cat.id, children);
+          }
+        });
+      } else {
+        toggle.disabled = true; toggle.textContent = "·";
+      }
+      return li;
+    }
+
+    async function loadSubcats(parentId, mount){
+      try{
+        if (cache.subs.has(parentId)){
+          mount.innerHTML = "";
+          cache.subs.get(parentId).forEach(sc => mount.appendChild(renderSubcat(parentId, sc)));
+          return;
+        }
+        mount.innerHTML = "<li>…</li>";
+        const r = await fetch(API.subcategories(parentId));
+        if(!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        cache.subs.set(parentId, data);
+        mount.innerHTML = "";
+        if (data.length===0){ mount.innerHTML = "<li class='meta'>Keine Unterkategorien</li>"; return; }
+        data.forEach(sc => mount.appendChild(renderSubcat(parentId, sc)));
+      }catch(e){
+        mount.innerHTML = `<li style="color:#ef4444">Fehler: ${e.message}</li>`;
+      }
+    }
+
+    function renderSubcat(catId, sc){
+      const {row,toggle,name} = line(sc.name, `${sc.pkg_count||0} Paket${(sc.pkg_count==1)?"":"e"}`, ()=>loadPkgs(catId, sc.id));
+      const children = h("ul",{class:"child",hidden:true});
+      const li = h("li",{}, row, children);
+
+      if ((sc.children_count||0) > 0){
+        toggle.addEventListener("click", async ()=>{
+          const open = toggle.textContent==="▼";
+          toggle.textContent = open ? "▶" : "▼";
+          children.hidden = open;
+          if (!open && !children.hasChildNodes()){
+            await loadSubcats(sc.id, children);
+          }
+        });
+      } else {
+        toggle.textContent = "✓";
+      }
+      return li;
+    }
+
+    async function loadPkgs(catId, subId){
+      pkgError.hidden = true; pkgEmpty.hidden = true; pkgList.innerHTML = ""; pkgLoading.hidden=false;
+      try{
+        let items = cache.pkgs.get(subId);
+        if (!items){
+          const r = await fetch(API.details(catId, subId));
+          if(!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          items = Array.isArray(data.items)?data.items:[];
+          cache.pkgs.set(subId, items);
+        }
+        renderPkgList(items);
+      }catch(e){
+        pkgError.textContent = `Fehler beim Laden: ${e.message}`; pkgError.hidden=false;
+      }finally{
+        pkgLoading.hidden = true;
+      }
+    }
+
+    function renderPkgList(items){
+      pkgList.innerHTML = "";
+      if (!items.length){ pkgEmpty.hidden=false; return; }
+      items.forEach(p => {
+        const box = h("div",{class:"pkg"},
+          h("div", {style:"font-weight:600"}, p.title || `Paket #${p.id}`),
+          h("div", {class:"meta"}, `erstellt: ${p.created} • geändert: ${p.changed}`),
+          h("div", {}, p.desc || "Keine Beschreibung.")
+        );
+        const btns = h("div",{style:"margin-top:8px;display:flex;gap:8px"},
+          h("button",{class:"btn",type:"button",onclick:()=>showDetails(p.id)},"Details"),
+          h("button",{class:"btn",type:"button",disabled:true,title:"Download-Endpunkt folgt"},"Download")
+        );
+        box.appendChild(btns);
+        pkgList.appendChild(box);
+      });
+    }
+
+    async function showDetails(id){
+      try{
+        if (!cache.detail.has(id)){
+          const r = await fetch(API.pkg(id));
+          if(!r.ok) throw new Error(`HTTP ${r.status}`);
+          cache.detail.set(id, await r.json());
+        }
+        const d = cache.detail.get(id);
+        alert(`${d.title}\n\n${d.desc || ""}\n\nKategorie: ${d?.node?.name || "–"}\nErstellt: ${d.created} • Geändert: ${d.changed}`);
+      }catch(e){
+        pkgError.textContent = `Fehler bei Details: ${e.message}`; pkgError.hidden=false;
+      }
+    }
+
+    loadCategories();
+  })();
+  </script>
+{% endblock %}
