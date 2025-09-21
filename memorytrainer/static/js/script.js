@@ -2,9 +2,9 @@
  * Expects:
  *   - window.API_BASE (String) e.g. "/api" (fallbacks to "/api")
  * Uses endpoints:
- *   GET  ${API_BASE}/categories/                         -> [ {id, name, children_count, pkg_count}, ... ]
- *   GET  ${API_BASE}/get_subcategories/<category_id>/    -> [ {id, name, children_count, pkg_count}, ... ]
- *   GET  ${API_BASE}/get_details/<category_id>/<sub_id>/ -> { items: [ {id, title, desc, created, changed}, ... ] }
+ *   GET  ${API_BASE}/categories/                         -> [ {id, name, children_count, pkg_count}, ... ]  ODER {categories:[...]}
+ *   GET  ${API_BASE}/get_subcategories/<category_id>/    -> [ {id, name, children_count, pkg_count}, ... ]  ODER {subcategories:[...]}
+ *   GET  ${API_BASE}/get_details/<category_id>/<sub_id>/ -> { items: [ {id, title, desc, created, changed}, ... ] } ODER {packages:[...]} ODER [...]
  *   GET  ${API_BASE}/package/<package_id>/               -> {id, title, desc, node:{...}, created, changed}
  */
 (function () {
@@ -12,6 +12,19 @@
 
   const treeContainer = document.getElementById('tree-container');
   if (!treeContainer) return;
+
+  // ------ NEU: Host-Container für Paketdetails unterhalb des Trees ------
+  function getDetailsHost() {
+    let host = document.getElementById('package-details');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'package-details';
+      host.className = 'package-details';
+      // direkt UNTERHALB der treeContainer-Section einfügen
+      treeContainer.parentNode.insertBefore(host, treeContainer.nextSibling);
+    }
+    return host;
+  }
 
   let selectedElement = null;
 
@@ -45,11 +58,17 @@
     panel.style.width = `${contentWidth + 40}px`;
   }
 
+  // ------ GEÄNDERT: Details unten statt rechts anzeigen ------
   async function createDetailPanel(packageData, level) {
     removeDetailPanel();
+
     const detailPanel = document.createElement('div');
     detailPanel.className = 'detail-panel';
     detailPanel.setAttribute('data-level', level);
+    // Volle Breite unter dem Tree
+    detailPanel.style.marginTop = '12px';
+    detailPanel.style.width = '100%';
+    detailPanel.style.boxSizing = 'border-box';
 
     const detailContent = document.createElement('div');
     detailContent.className = 'detail-content';
@@ -73,30 +92,16 @@
     `;
     detailPanel.appendChild(detailContent);
 
-    const rightResizeHandle = document.createElement('div');
-    rightResizeHandle.className = 'resize-handle right-resize-handle';
-    function initResize(e) {
-      const startX = e.clientX;
-      const startWidth = detailPanel.offsetWidth;
-      function doResize(ev) { detailPanel.style.width = `${startWidth + ev.clientX - startX}px`; }
-      function stopResize() {
-        document.removeEventListener('mousemove', doResize);
-        document.removeEventListener('mouseup', stopResize);
-      }
-      document.addEventListener('mousemove', doResize);
-      document.addEventListener('mouseup', stopResize);
-    }
-    rightResizeHandle.addEventListener('mousedown', initResize);
-    detailPanel.appendChild(rightResizeHandle);
-
-    treeContainer.appendChild(detailPanel);
-    adjustPanelWidth(detailPanel);
+    // NEU: unten unter dem gesamten Tree einfügen (kein Rechts-Panel, kein Resizer)
+    const host = getDetailsHost();
+    host.innerHTML = '';                 // jeweils ersetzen
+    host.appendChild(detailPanel);
   }
 
   async function fetchJSON(url) {
     const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
     if (!res.ok) {
-      const txt = await res.text().catch(()=>''); throw new Error(`HTTP ${res.status}: ${url}\n${txt}`);
+      const txt = await res.text().catch(()=> ''); throw new Error(`HTTP ${res.status}: ${url}\n${txt}`);
     }
     return res.json();
   }
@@ -108,19 +113,22 @@
 
   async function fetchRoots() {
     const data = await fetchJSON(`${API_BASE}/categories/`);
-    // map to legacy shape { pk, fields:{ text } }
-    return data.map(n => ({ pk: n.id, fields: { text: n.name }, children_count: n.children_count, pkg_count: n.pkg_count }));
+    const arr = Array.isArray(data) ? data : (data.categories || []);
+    return arr.map(n => ({ pk: n.id, fields: { text: n.name }, children_count: n.children_count, pkg_count: n.pkg_count }));
   }
 
   async function fetchSubcategories(categoryId) {
     const data = await fetchJSON(`${API_BASE}/get_subcategories/${encodeURIComponent(categoryId)}/`);
-    return data.map(n => ({ pk: n.id, fields: { text: n.name }, children_count: n.children_count, pkg_count: n.pkg_count }));
+    const arr = Array.isArray(data) ? data : (data.subcategories || []);
+    return arr.map(n => ({ pk: n.id, fields: { text: n.name }, children_count: n.children_count, pkg_count: n.pkg_count }));
   }
 
   async function fetchPackages(categoryId, subId) {
     const data = await fetchJSON(`${API_BASE}/get_details/${encodeURIComponent(categoryId)}/${encodeURIComponent(subId)}/`);
-    const items = Array.isArray(data.items) ? data.items : [];
-    // map to legacy shape used in UI section
+    const items =
+      Array.isArray(data?.items)    ? data.items :
+      Array.isArray(data?.packages) ? data.packages :
+      Array.isArray(data)           ? data : [];
     return items.map(p => ({ pk: p.id, fields: { packageName: p.title, packageDescription: p.desc, createDate: p.created, changeDate: p.changed } }));
   }
 
@@ -156,7 +164,6 @@
       container.appendChild(textSpan);
       li.appendChild(container);
 
-      // Show expand icon if backend says there are children
       const hasChildren = (typeof item.children_count === 'number') ? item.children_count > 0 : false;
       if (hasChildren) {
         const expandIcon = document.createElement('span');
@@ -167,29 +174,33 @@
 
       li.addEventListener('click', async (event) => {
         event.stopPropagation();
-        selectElement(li);
 
-        // reset siblings' expand icon in same level
         const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'));
+        selectElement(li, currentLevel > 0);
+
+        // Bei Navigation im Baum Details schließen
+        removeDetailPanel();
+
+        // Siblings im gleichen Level zurücksetzen
         document.querySelectorAll(`.tree-panel[data-level="${currentLevel}"] li`).forEach(otherLi => {
           if (otherLi !== li) {
             const otherIcon = otherLi.querySelector('.expand-icon');
             if (otherIcon) otherIcon.textContent = '▶';
+            otherLi.classList.remove('expanded');
           }
         });
 
         const expandIcon = li.querySelector('.expand-icon');
 
-        // remove deeper levels that don't belong to this node
-        document.querySelectorAll(`.tree-panel[data-level="${currentLevel + 1}"]`).forEach(p => {
-          if (!p.querySelector(`[data-parent-id="${item.pk}"]`)) p.remove();
+        // Alle tieferen Ebenen rechts entfernen
+        document.querySelectorAll('.tree-panel').forEach(p => {
+          const lvl = parseInt(p.getAttribute('data-level'));
+          if (lvl > currentLevel) p.remove();
         });
 
         if (li.classList.contains('expanded')) {
           li.classList.remove('expanded');
           if (expandIcon) expandIcon.textContent = '▶';
-          // collapse: remove panels deeper than current
-          document.querySelectorAll(`.tree-panel[data-level="${currentLevel + 1}"]`).forEach(p => p.remove());
           removeDetailPanel();
           return;
         }
@@ -197,17 +208,16 @@
         li.classList.add('expanded');
         if (expandIcon) expandIcon.textContent = '▼';
 
-        // load next-level categories
+        // nächste Ebene laden (nur wenn geöffnet)
         const nextItems = await fetchSubcategories(item.pk);
         if (nextItems.length > 0) {
-          await createPanel(nextItems, level + 1, false, item.pk, currentRootId ?? items.rootId ?? null);
+          await createPanel(nextItems, level + 1, false, item.pk, null);
         }
 
-        // If we are in a subcategory panel (parentId is root-id), load its packages
+        // In Unterebenen: Pakete laden
         if (parentId != null && level >= 1) {
           try {
             const pkgs = await fetchPackages(parentId, item.pk);
-            // remove any existing package entries first (those are <li data-type="exercise-package">)
             ul.querySelectorAll('li[data-type="exercise-package"]').forEach(n => n.remove());
             if (pkgs.length > 0) {
               pkgs.forEach(pkg => {
@@ -236,7 +246,7 @@
                   ev.stopPropagation();
                   selectElement(packageLi, true);
                   const data = await loadPackageDetails(pkg.pk);
-                  if (data) await createDetailPanel(data, level + 2);
+                  if (data) await createDetailPanel(data, level + 2); // jetzt unten statt rechts
                 });
 
                 ul.appendChild(packageLi);
@@ -275,7 +285,6 @@
     treeContainer.appendChild(panel);
 
     if (autoSelectFirst && firstLi) {
-      // simulate click to auto-load first branch
       firstLi.click();
     }
   }

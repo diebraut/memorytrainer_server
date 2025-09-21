@@ -237,3 +237,171 @@ h1 {
 .date-label {
     font-weight: bold; /* Fett (bold) darstellen */
 }
+
+/* ---------- Paket-Details: gut lesbar unter dem Tree ---------- */
+#package-details {
+  padding: 12px 0;
+}
+
+#package-details .detail-panel {
+  background: #ffffff;
+  color: #111111;                     /* hoher Kontrast */
+  border: 1px solid #d0d7de;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.06);
+  padding: 14px 16px;
+}
+
+#package-details .detail-content {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+#package-details .detail-content h2 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  line-height: 1.3;
+  color: #111111;                     /* explizit dunkel */
+}
+
+#package-details .detail-content .description {
+  margin: 6px 0 12px 0;
+  color: #222222;                     /* etwas heller als Überschrift, aber stark */
+}
+
+#package-details .divider {
+  height: 1px;
+  background: #e6e8eb;
+  margin: 10px 0 12px 0;
+  border: 0;
+}
+
+#package-details .info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  align-items: start;
+}
+
+#package-details .date-label {
+  margin: 0;
+  color: #444444;                     /* Labels etwas abgesetzt */
+  font-weight: 600;
+}
+
+#package-details .date-value {
+  margin: 0;
+  color: #111111;                     /* Werte maximal lesbar */
+}
+
+#package-details a {
+  color: #0b57d0;                     /* gut lesbares Link-Blau */
+  text-decoration: none;
+}
+#package-details a:hover { text-decoration: underline; }
+
+/* Optional: leichte Typo-Glättung */
+#package-details, #package-details * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Dark mode (falls Seite dunkel ist) ---------- */
+@media (prefers-color-scheme: dark) {
+  #package-details .detail-panel {
+    background: #161b22;
+    color: #e6edf3;
+    border-color: #30363d;
+    box-shadow: none;
+  }
+  #package-details .detail-content h2 { color: #e6edf3; }
+  #package-details .detail-content .description { color: #d0d7de; }
+  #package-details .divider { background: #30363d; }
+  #package-details .date-label { color: #c9d1d9; }
+  #package-details .date-value { color: #f0f6fc; }
+  #package-details a { color: #58a6ff; }
+}
+/* Paket: nach Klick leicht nach rechts "springen" */
+.tree-panel li[data-type="exercise-package"] > div {
+  transform: translateX(0);
+  transition: transform 120ms ease, outline-color 120ms ease;
+  will-change: transform;
+}
+
+/* ausgewähltes Paket */
+.tree-panel li[data-type="exercise-package"].selected > div {
+  transform: translateX(16px); /* verschiebt nach rechts */
+}
+
+/* Auswahl-Highlight OHNE Layout-Verschiebung */
+.tree-panel li[data-type="exercise-package"].selected {
+  border-color: transparent !important;     /* vorhandene Border neutralisieren */
+  outline: 2px solid #888;                  /* sichtbare Markierung */
+  outline-offset: -2px;
+  box-sizing: border-box;
+}
+
+/* Dark mode Tweaks (optional) */
+@media (prefers-color-scheme: dark) {
+  .tree-panel li[data-type="exercise-package"].selected {
+    outline-color: #9aa4b2;
+  }
+}
+
+/* Einheitliches Verhalten: ausgewählte Einträge rücken nach rechts ein
+   (gilt für Kategorien und Pakete) */
+.tree-panel li {
+  box-sizing: border-box;
+  padding-left: 8px;                 /* Grund-Einzug für alle */
+  transition: padding-left 120ms ease;
+}
+
+/* ausgewählt = weiter rechts */
+.tree-panel li.selected {
+  padding-left: 24px;                /* „springt“ nach rechts */
+}
+
+/* falls du NUR Pakete so willst, dann statt .tree-panel li.selected: */
+ /* .tree-panel li[data-type="exercise-package"].selected { padding-left: 24px; } */
+
+/* Markierung ohne Layout-Verschiebung */
+.tree-panel li.selected {
+  outline: 2px solid #888;           /* sichtbare Auswahl */
+  outline-offset: -2px;
+  border-color: transparent !important;
+}
+
+/* Optional Dark Mode Kontrast */
+@media (prefers-color-scheme: dark) {
+  .tree-panel li.selected { outline-color: #9aa4b2; }
+}
+
+/* WICHTIG: Frühere Transform-Regeln neutralisieren (falls noch vorhanden) */
+.tree-panel li[data-type="exercise-package"] > div {
+  transform: none !important;
+  transition: none !important;
+}
+
+/* Fix: ausgewähltes Paket behält den 30px-Einzug wie im Normalzustand */
+.tree-panel li[data-type="exercise-package"].selected {
+  padding-left: 30px !important;
+}
+/* Bessere Erkennbarkeit der Icons im selektierten Zustand (Pakete & Kategorien) */
+.tree-panel li.selected .knowledge-icon {
+  /* bleibt weiß, bekommt aber eine feine dunkle Kontur */
+  filter: brightness(0) invert(1)
+          drop-shadow(0 0 0.8px rgba(0,0,0,0.95))
+          drop-shadow(0 0 2px rgba(0,0,0,0.35)) !important;
+  opacity: 1;
+}
+/* Icon in ausgewählten Einträgen (Kategorien & Pakete) klar sichtbar machen */
+.tree-panel li.selected .knowledge-icon {
+  display: inline-block;              /* falls <img> sich sonst „zusammenzieht“ */
+  filter: none !important;            /* überschreibt evtl. invert/brightness-Regeln */
+  background-color: #ffffff;          /* weißer Hintergrund hinter dem Icon */
+  border-radius: 4px;                 /* leicht abrunden */
+  padding: 2px;                       /* kleine „Plakette“ um das Icon */
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.25); /* dünne Kontur für Kontrast */
+}
+
+/* Optional: Wenn dir 2px Padding zu breit ist, nimm 1px */
