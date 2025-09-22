@@ -403,5 +403,137 @@ h1 {
   padding: 2px;                       /* kleine „Plakette“ um das Icon */
   box-shadow: 0 0 0 1px rgba(0,0,0,0.25); /* dünne Kontur für Kontrast */
 }
+/* Vorfahr (Kategorie) dezent markieren, wenn ein Paket selektiert ist */
+.tree-panel li.is-ancestor > div {
+  background: rgba(0,123,255,.08);
+  border-radius: 4px;
+}
+/* Kategorien: niemals horizontal verrücken (weder normal noch selected) */
+.tree-panel li:not([data-type="exercise-package"]) {
+  margin-left: 0 !important;
+  padding-left: 8px !important;        /* Basis wie deine Zeilen-Defaults */
+}
+.tree-panel li:not([data-type="exercise-package"]) > div {
+  margin-left: 0 !important;
+  justify-content: flex-start !important;
+}
+
+/* Auch im selektierten Zustand keinen zusätzlichen Einzug */
+.tree-panel li:not([data-type="exercise-package"]).selected {
+  margin-left: 0 !important;
+  padding-left: 8px !important;
+}
+.tree-panel li:not([data-type="exercise-package"]).selected > div {
+  margin-left: 0 !important;
+}
+/* Kompakte Formular-Gitter für Kategorie-Panel */
+.kt-form-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;  /* Label | Feld */
+  gap: 8px 12px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.kt-form-grid label {
+  font-weight: 600;
+  color: #444;
+  line-height: 1.3;
+}
+
+/* Inputs wie bisher, nur leicht verfeinert */
+.kt-input {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+}
+.kt-input--readonly {
+  background: #f6f8fa;
+}
+
+/* Mobile: Labels über dem Feld */
+@media (max-width: 640px) {
+  .kt-form-grid {
+    grid-template-columns: 1fr;      /* 1 Spalte */
+  }
+  .kt-form-grid label {
+    margin-top: 6px;
+  }
+}
+
+/* Dark Mode Harmonisierung */
+@media (prefers-color-scheme: dark) {
+  .kt-form-grid label { color: #c9d1d9; }
+  .kt-input {
+    background: #0d1117;
+    color: #e6edf3;
+    border-color: #30363d;
+  }
+  .kt-input--readonly {
+    background: #161b22;
+  }
+}
+
+/* Editierbare Inputs immer mit weißem Hintergrund (auch im Dark Mode) */
+.kt-input--editable {
+  background: #ffffff !important;
+  color: #111111 !important;
+  border: 1px solid #d0d7de;
+}
+@media (prefers-color-scheme: dark) {
+  .kt-input--editable {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border-color: #d0d7de;
+  }
+}
+
+/* Read-only leicht absetzen (falls noch nicht vorhanden) */
+.kt-input--readonly {
+  background: #f6f8fa;
+  color: #444;
+  border: 1px solid #d0d7de;
+}
+
+/* Deutlichere Hervorhebung der Kategorie, zu der das selektierte Paket gehört */
+.tree-panel li.is-ancestor > div {
+  background: rgba(0, 123, 255, 0.18);
+  box-shadow: inset 3px 0 0 #007BFF;   /* linker Farbbalken ohne Layout-Shift */
+  border-radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  .tree-panel li.is-ancestor > div {
+    background: rgba(88, 166, 255, 0.18);
+    box-shadow: inset 3px 0 0 #58a6ff;
+  }
+}
+/* Reines Ausgabefeld (nicht fokussierbar/anklickbar), optisch wie ein Input */
+.kt-output {
+  background: #f6f8fa;              /* leicht abgesetzt */
+  color: #111;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 8px;
+  line-height: 1.4;
+  min-height: 38px;                  /* Höhe wie Input */
+  box-sizing: border-box;
+  pointer-events: none;              /* nicht anklickbar */
+  user-select: none;                 /* Text nicht markierbar */
+  cursor: default;
+}
+
+@media (prefers-color-scheme: dark) {
+  .kt-output {
+    background: #161b22;
+    color: #e6edf3;
+    border-color: #30363d;
+  }
+}
+
+
 
 /* Optional: Wenn dir 2px Padding zu breit ist, nimm 1px */

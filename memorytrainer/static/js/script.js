@@ -52,6 +52,24 @@
     return isNaN(date.getTime()) ? '' : date.toLocaleDateString('de-DE', options);
   }
 
+  // Sicheres Escapen für Input-Values
+  function escapeHtml(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ISO-Datum (YYYY-MM-DD) für <input type="date">
+  function formatDateISO(d) {
+    const dt = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(dt.getTime())) return "";
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const day = String(dt.getDate()).padStart(2, "0");
+    return `${dt.getFullYear()}-${m}-${day}`;
+  }
+
   function adjustPanelWidth(panel) {
     const content = panel.querySelector('.detail-content');
     const contentWidth = content ? content.scrollWidth : 420;
@@ -201,7 +219,8 @@
         if (li.classList.contains('expanded')) {
           li.classList.remove('expanded');
           if (expandIcon) expandIcon.textContent = '▶';
-          removeDetailPanel();
+          // Detailpanel nicht leer lassen: Kategorie-Infos unten anzeigen
+          await createCategoryPanel(item, level + 1);
           return;
         }
 
@@ -218,12 +237,17 @@
         if (parentId != null && level >= 1) {
           try {
             const pkgs = await fetchPackages(parentId, item.pk);
+            // Vorherige Pakete in diesem Panel entfernen (falls vorhanden)
             ul.querySelectorAll('li[data-type="exercise-package"]').forEach(n => n.remove());
+
             if (pkgs.length > 0) {
+              // Alle neuen Pakete direkt NACH dem angeklickten <li> einfügen
+              const frag = document.createDocumentFragment();
               pkgs.forEach(pkg => {
                 const packageLi = document.createElement('li');
                 packageLi.setAttribute('data-id', pkg.pk);
                 packageLi.setAttribute('data-type', 'exercise-package');
+                packageLi.setAttribute('data-parent-id', String(item.pk));  // zum gezielten Entfernen
 
                 const packageContainer = document.createElement('div');
                 packageContainer.style.display = "flex";
@@ -245,12 +269,18 @@
                 packageLi.addEventListener('click', async (ev) => {
                   ev.stopPropagation();
                   selectElement(packageLi, true);
+                  // Optionale subtile Vorfahr-Markierung (keine „selected“-Klasse!)
+                  document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+                  li.classList.add('is-ancestor'); // 'li' ist hier das Kategorieli
+
                   const data = await loadPackageDetails(pkg.pk);
-                  if (data) await createDetailPanel(data, level + 2); // jetzt unten statt rechts
+                  if (data) await createDetailPanel(data, level + 2);
                 });
 
-                ul.appendChild(packageLi);
+                frag.appendChild(packageLi);
               });
+              // genau hier: Pakete direkt hinter den geklickten Knoten einfügen
+              li.parentNode.insertBefore(frag, li.nextSibling);
             } else {
               removeDetailPanel();
             }
@@ -258,8 +288,8 @@
             console.error(e);
           }
         }
-      });
-
+        // Kategorie-Panel unter dem Tree anzeigen (Name, Erzeugt am, Geändert am)
+        await createCategoryPanel(item, level + 1);      });
       ul.appendChild(li);
       if (!firstLi) firstLi = li;
     } // end for items
@@ -287,6 +317,58 @@
     if (autoSelectFirst && firstLi) {
       firstLi.click();
     }
+  }
+  async function createCategoryPanel(categoryItem, level) {
+    // Host unter dem Tree (gleich wie bei Paketen)
+    const host = (typeof getDetailsHost === "function") ? getDetailsHost() : (function () {
+      let h = document.getElementById('package-details');
+      if (!h) {
+        h = document.createElement('div');
+        h.id = 'package-details';
+        h.className = 'package-details';
+        treeContainer.parentNode.insertBefore(h, treeContainer.nextSibling);
+      }
+      return h;
+    })();
+
+    host.innerHTML = ""; // jeweils ersetzen
+
+    const today = new Date();
+    const prettyToday = formatDate(today);     // "Montag, 22. September 2025"
+    const isoToday    = formatDateISO(today);  // "2025-09-22"
+
+    const panel = document.createElement('div');
+    panel.className = 'detail-panel';
+    panel.setAttribute('data-level', level);
+    panel.style.marginTop = '12px';
+    panel.style.width = '100%';
+    panel.style.boxSizing = 'border-box';
+
+    // einfache, saubere Inputs (keine Speicherung – nur Anzeige/Editing UI)
+    panel.innerHTML = `    
+      <div class="detail-content">
+        <h2>Kategorie bearbeiten</h2>
+    
+        <div class="kt-form-grid">
+          <label for="cat-name">Name</label>
+          <input id="cat-name" type="text"
+                 class="kt-input kt-input--editable"
+                 value="${escapeHtml(categoryItem.fields?.text)}">
+    
+          <label>Erzeugt am</label>
+          <div id="cat-created"
+            class="kt-output"
+            aria-readonly="true"
+            tabindex="-1">${escapeHtml(prettyToday)}
+          </div>    
+          <label for="cat-changed">Geändert am</label>
+          <input id="cat-changed" type="date"
+                 class="kt-input kt-input--editable"
+                 value="${isoToday}">
+        </div>
+      </div>
+    `;
+    host.appendChild(panel);
   }
 
   async function init() {
