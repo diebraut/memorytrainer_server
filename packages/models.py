@@ -1,15 +1,16 @@
 from django.db import models
 from django.utils import timezone
 
+from django.db import models
+from django.utils import timezone
+
 class TreeNode(models.Model):
     text = models.CharField(max_length=255)
-    parent = models.ForeignKey(
-        'self',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='children'
-    )
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+
+    # NEU: Datumsfelder – editierbar (kein auto_now/auto_now_add, damit du sie im UI setzen kannst)
+    createDate = models.DateField(default=timezone.now)
+    changeDate = models.DateField(default=timezone.now)
 
     class Meta:
         ordering = ['text']

@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 from django.db.models import Count
-from .models import TreeNode, ExercisePackage, KnowledgeTree
+from packages.models import TreeNode, ExercisePackage
 
 def categories(request):
     """

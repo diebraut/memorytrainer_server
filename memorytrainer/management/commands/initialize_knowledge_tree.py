@@ -1,6 +1,6 @@
 # memorytrainer/management/commands/initialize_knowledge_tree.py
 from django.core.management.base import BaseCommand
-from memorytrainer.models import KnowledgeTree
+from packages.models import TreeNode, ExercisePackage
 
 class Command(BaseCommand):
     help = 'Initialisiert den Knowledge Tree'

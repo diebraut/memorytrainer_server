@@ -19,9 +19,8 @@ ALLOWED_HOSTS = []  # für Dev okay; sonst z.B. ["localhost","127.0.0.1"]
 
 # Application definition
 INSTALLED_APPS = [
-    "packages",           # deine App mit den Models/Views
+    "packages.apps.PackagesConfig",
     "landing",            # deine Landing-Seiten-App
-    # 'memorytrainer.apps.memorytrainer.MyMemorytrainerConfig',  # <— ENTFERNEN, falls es diese Klasse nicht gibt
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

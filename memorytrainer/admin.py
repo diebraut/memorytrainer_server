@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import TreeNode, ExercisePackage
+from packages.models import TreeNode, ExercisePackage
 
 @admin.register(TreeNode)
 class TreeNodeAdmin(admin.ModelAdmin):

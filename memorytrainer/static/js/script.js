@@ -1,26 +1,23 @@
-/* Knowledge-Tree (ported from memorytrainer_old, adapted to new /api endpoints)
- * Expects:
- *   - window.API_BASE (String) e.g. "/api" (fallbacks to "/api")
- * Uses endpoints:
- *   GET  ${API_BASE}/categories/                         -> [ {id, name, children_count, pkg_count}, ... ]  ODER {categories:[...]}
- *   GET  ${API_BASE}/get_subcategories/<category_id>/    -> [ {id, name, children_count, pkg_count}, ... ]  ODER {subcategories:[...]}
- *   GET  ${API_BASE}/get_details/<category_id>/<sub_id>/ -> { items: [ {id, title, desc, created, changed}, ... ] } ODER {packages:[...]} ODER [...]
- *   GET  ${API_BASE}/package/<package_id>/               -> {id, title, desc, node:{...}, created, changed}
- */
+/* Knowledge-Tree (ported from memorytrainer_old, adapted to new /api endpoints) */
 (function () {
   const API_BASE = (typeof window.API_BASE === "string" && window.API_BASE) ? window.API_BASE : "/api";
 
   const treeContainer = document.getElementById('tree-container');
   if (!treeContainer) return;
 
-  // ------ NEU: Host-Container für Paketdetails unterhalb des Trees ------
+  // ---- utils ----
+  function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? decodeURIComponent(m.pop()) : null;
+  }
+  const CSRF_HEADER_NAME = 'X-CSRFToken';
+
   function getDetailsHost() {
     let host = document.getElementById('package-details');
     if (!host) {
       host = document.createElement('div');
       host.id = 'package-details';
       host.className = 'package-details';
-      // direkt UNTERHALB der treeContainer-Section einfügen
       treeContainer.parentNode.insertBefore(host, treeContainer.nextSibling);
     }
     return host;
@@ -52,7 +49,6 @@
     return isNaN(date.getTime()) ? '' : date.toLocaleDateString('de-DE', options);
   }
 
-  // Sicheres Escapen für Input-Values
   function escapeHtml(s) {
     return String(s ?? "")
       .replace(/&/g, "&amp;")
@@ -61,7 +57,6 @@
       .replace(/"/g, "&quot;");
   }
 
-  // ISO-Datum (YYYY-MM-DD) für <input type="date">
   function formatDateISO(d) {
     const dt = (d instanceof Date) ? d : new Date(d);
     if (isNaN(dt.getTime())) return "";
@@ -70,20 +65,26 @@
     return `${dt.getFullYear()}-${m}-${day}`;
   }
 
-  function adjustPanelWidth(panel) {
-    const content = panel.querySelector('.detail-content');
-    const contentWidth = content ? content.scrollWidth : 420;
-    panel.style.width = `${contentWidth + 40}px`;
+  async function fetchJSON(url) {
+    const busted = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+    const res = await fetch(busted, {
+      headers: { 'Accept': 'application/json', 'Cache-Control': 'no-cache' },
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(()=> ''); throw new Error(`HTTP ${res.status}: ${url}\n${txt}`);
+    }
+    return res.json();
   }
 
-  // ------ GEÄNDERT: Details unten statt rechts anzeigen ------
+  // ---- package details (unten) ----
   async function createDetailPanel(packageData, level) {
     removeDetailPanel();
 
     const detailPanel = document.createElement('div');
     detailPanel.className = 'detail-panel';
     detailPanel.setAttribute('data-level', level);
-    // Volle Breite unter dem Tree
     detailPanel.style.marginTop = '12px';
     detailPanel.style.width = '100%';
     detailPanel.style.boxSizing = 'border-box';
@@ -94,7 +95,8 @@
     const formattedChangeDate = formatDate(packageData.changed);
 
     detailContent.innerHTML = `
-      <h2>${packageData.title ?? 'Paket'}</h2>
+      <h2>Packagebeschreibung</h2>
+      <h3 class="package-title">${packageData.title ?? 'Paket'}</h3>
       <p class="description">${packageData.desc ?? ''}</p>
       <div class="divider"></div>
       <div class="info-grid">
@@ -107,49 +109,132 @@
           <p class="date-value">${formattedChangeDate}</p>
         </div>
       </div>
+
+      <div class="kt-actions" role="group" aria-label="Paket-Aktionen">
+        <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-before">Neues Paket (davor)</button>
+        <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-after">Neues Paket (danach)</button>
+        <button type="button" class="kt-btn kt-btn--primary" data-scope="package" data-action="update">Paket ändern</button>
+        <button type="button" class="kt-btn kt-btn--danger"  data-scope="package" data-action="delete">Paket löschen</button>
+      </div>
     `;
     detailPanel.appendChild(detailContent);
 
-    // NEU: unten unter dem gesamten Tree einfügen (kein Rechts-Panel, kein Resizer)
     const host = getDetailsHost();
-    host.innerHTML = '';                 // jeweils ersetzen
+    host.innerHTML = '';
     host.appendChild(detailPanel);
   }
 
-  async function fetchJSON(url) {
-    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) {
-      const txt = await res.text().catch(()=> ''); throw new Error(`HTTP ${res.status}: ${url}\n${txt}`);
-    }
-    return res.json();
-  }
-
+  // ---- data fetchers ----
   async function loadPackageDetails(packageId) {
-    const data = await fetchJSON(`${API_BASE}/package/${encodeURIComponent(packageId)}/`);
-    return data;
+    return fetchJSON(`${API_BASE}/package/${encodeURIComponent(packageId)}/`);
   }
-
   async function fetchRoots() {
     const data = await fetchJSON(`${API_BASE}/categories/`);
     const arr = Array.isArray(data) ? data : (data.categories || []);
-    return arr.map(n => ({ pk: n.id, fields: { text: n.name }, children_count: n.children_count, pkg_count: n.pkg_count }));
+    return arr.map(n => ({
+      pk: n.id,
+      fields: { text: n.name, created: n.created, changed: n.changed },
+      children_count: n.children_count, pkg_count: n.pkg_count
+    }));
   }
-
   async function fetchSubcategories(categoryId) {
     const data = await fetchJSON(`${API_BASE}/get_subcategories/${encodeURIComponent(categoryId)}/`);
     const arr = Array.isArray(data) ? data : (data.subcategories || []);
-    return arr.map(n => ({ pk: n.id, fields: { text: n.name }, children_count: n.children_count, pkg_count: n.pkg_count }));
+    return arr.map(n => ({
+      pk: n.id,
+      fields: { text: n.name, created: n.created, changed: n.changed },
+      children_count: n.children_count, pkg_count: n.pkg_count
+    }));
   }
-
   async function fetchPackages(categoryId, subId) {
     const data = await fetchJSON(`${API_BASE}/get_details/${encodeURIComponent(categoryId)}/${encodeURIComponent(subId)}/`);
     const items =
       Array.isArray(data?.items)    ? data.items :
       Array.isArray(data?.packages) ? data.packages :
       Array.isArray(data)           ? data : [];
-    return items.map(p => ({ pk: p.id, fields: { packageName: p.title, packageDescription: p.desc, createDate: p.created, changeDate: p.changed } }));
+    return items.map(p => ({
+      pk: p.id,
+      fields: {
+        packageName: p.title,
+        packageDescription: p.desc,
+        createDate: p.created,
+        changeDate: p.changed
+      }
+    }));
   }
 
+  // ---- category panel (unten) ----
+  async function createCategoryPanel(categoryItem, level, opts = {}) {
+    const isDraft = opts.mode === 'draft';
+    const host = getDetailsHost();
+    host.innerHTML = "";
+
+    // Host-Kontext
+    host.dataset.categoryId = String(categoryItem.pk);
+    host.dataset.mode       = isDraft ? 'draft' : 'edit';
+
+    // Werte
+    let createdISO  = categoryItem.fields?.created || "";
+    let changedISO  = categoryItem.fields?.changed || "";
+    let nameValue   = categoryItem.fields?.text || "";
+
+    if (isDraft) {
+      nameValue  = "";
+      const today = new Date();
+      createdISO = formatDateISO(today);
+      changedISO = formatDateISO(today);
+    }
+
+    host.dataset.categoryName     = nameValue || "";
+    host.dataset.categoryCreated  = createdISO || "";
+    host.dataset.categoryChanged  = changedISO || "";
+
+    const panel = document.createElement('div');
+    panel.className = 'detail-panel';
+    panel.setAttribute('data-level', level);
+    panel.style.marginTop = '12px';
+    panel.style.width = '100%';
+    panel.style.boxSizing = 'border-box';
+
+    const prettyCreated = createdISO ? formatDate(createdISO) : "";
+    const isoChanged    = changedISO || "";
+
+    panel.innerHTML = `
+      <div class="detail-content">
+        <h2>Kategorie bearbeiten</h2>
+
+        <div class="kt-form-grid">
+          <label for="cat-name">Name</label>
+          <input id="cat-name" type="text" class="kt-input kt-input--editable" value="${escapeHtml(nameValue)}">
+
+          <label>Erzeugt am</label>
+          <div id="cat-created" class="kt-output" aria-readonly="true" tabindex="-1">
+            ${escapeHtml(prettyCreated)}
+          </div>
+
+          <label for="cat-changed">Geändert am</label>
+          <input id="cat-changed" type="date" class="kt-input kt-input--editable" value="${isoChanged}">
+        </div>
+
+        <div class="kt-actions" role="group" aria-label="Kategorie-Aktionen">
+          <button type="button" class="kt-btn"                 data-scope="category" data-action="insert-before">Neue Kategorie (davor)</button>
+          <button type="button" class="kt-btn"                 data-scope="category" data-action="insert-after">Neue Kategorie (danach)</button>
+          <button type="button" class="kt-btn kt-btn--primary" data-scope="category" data-action="update">${isDraft ? 'Neu anlegen' : 'Kategorie ändern'}</button>
+          <button type="button" class="kt-btn kt-btn--danger"  data-scope="category" data-action="delete">Kategorie löschen</button>
+        </div>
+      </div>
+    `;
+    host.appendChild(panel);
+
+    // Draft: Insert-Buttons verbergen
+    if (isDraft) {
+      panel.querySelectorAll(
+        '[data-scope="category"][data-action="insert-before"],[data-action="insert-after"]'
+      ).forEach(b => { b.style.display = 'none'; });
+    }
+  }
+
+  // ---- tree panels ----
   async function createPanel(items, level, autoSelectFirst = false, parentId = null, currentRootId = null) {
     const panel = document.createElement('div');
     panel.className = 'tree-panel';
@@ -182,6 +267,11 @@
       container.appendChild(textSpan);
       li.appendChild(container);
 
+      // dataset → immer aktuelle Werte
+      li.dataset.name    = item.fields?.text     || '';
+      li.dataset.created = item.fields?.created  || '';
+      li.dataset.changed = item.fields?.changed  || '';
+
       const hasChildren = (typeof item.children_count === 'number') ? item.children_count > 0 : false;
       if (hasChildren) {
         const expandIcon = document.createElement('span');
@@ -190,16 +280,14 @@
         li.appendChild(expandIcon);
       }
 
+      // --- click handler (bereinigt) ---
       li.addEventListener('click', async (event) => {
         event.stopPropagation();
 
-        const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'));
+        const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'), 10);
         selectElement(li, currentLevel > 0);
 
-        // Bei Navigation im Baum Details schließen
-        removeDetailPanel();
-
-        // Siblings im gleichen Level zurücksetzen
+        // Siblings reset
         document.querySelectorAll(`.tree-panel[data-level="${currentLevel}"] li`).forEach(otherLi => {
           if (otherLi !== li) {
             const otherIcon = otherLi.querySelector('.expand-icon');
@@ -208,46 +296,55 @@
           }
         });
 
-        const expandIcon = li.querySelector('.expand-icon');
-
-        // Alle tieferen Ebenen rechts entfernen
+        // tiefere Ebenen entfernen
         document.querySelectorAll('.tree-panel').forEach(p => {
-          const lvl = parseInt(p.getAttribute('data-level'));
+          const lvl = parseInt(p.getAttribute('data-level'), 10);
           if (lvl > currentLevel) p.remove();
         });
 
-        if (li.classList.contains('expanded')) {
+        const expandIcon = li.querySelector('.expand-icon');
+
+        // Daten fürs Panel NUR aus dataset
+        const mergedForPanel = {
+          pk: item.pk,
+          fields: {
+            text:    li.dataset.name    || item.fields?.text || '',
+            created: li.dataset.created || item.fields?.created || '',
+            changed: li.dataset.changed || item.fields?.changed || '',
+          }
+        };
+
+        const wasExpanded = li.classList.contains('expanded');
+        if (wasExpanded) {
           li.classList.remove('expanded');
           if (expandIcon) expandIcon.textContent = '▶';
-          // Detailpanel nicht leer lassen: Kategorie-Infos unten anzeigen
-          await createCategoryPanel(item, level + 1);
+          ul.querySelectorAll(`li[data-type="exercise-package"][data-parent-id="${item.pk}"]`).forEach(n => n.remove());
+          await createCategoryPanel(mergedForPanel, currentLevel + 1);
           return;
         }
 
         li.classList.add('expanded');
         if (expandIcon) expandIcon.textContent = '▼';
 
-        // nächste Ebene laden (nur wenn geöffnet)
+        // Unterkategorien
         const nextItems = await fetchSubcategories(item.pk);
         if (nextItems.length > 0) {
           await createPanel(nextItems, level + 1, false, item.pk, null);
         }
 
-        // In Unterebenen: Pakete laden
+        // Pakete (nur in Unterebenen)
         if (parentId != null && level >= 1) {
           try {
             const pkgs = await fetchPackages(parentId, item.pk);
-            // Vorherige Pakete in diesem Panel entfernen (falls vorhanden)
-            ul.querySelectorAll('li[data-type="exercise-package"]').forEach(n => n.remove());
+            ul.querySelectorAll(`li[data-type="exercise-package"][data-parent-id="${item.pk}"]`).forEach(n => n.remove());
 
             if (pkgs.length > 0) {
-              // Alle neuen Pakete direkt NACH dem angeklickten <li> einfügen
               const frag = document.createDocumentFragment();
               pkgs.forEach(pkg => {
                 const packageLi = document.createElement('li');
                 packageLi.setAttribute('data-id', pkg.pk);
                 packageLi.setAttribute('data-type', 'exercise-package');
-                packageLi.setAttribute('data-parent-id', String(item.pk));  // zum gezielten Entfernen
+                packageLi.setAttribute('data-parent-id', String(item.pk));
 
                 const packageContainer = document.createElement('div');
                 packageContainer.style.display = "flex";
@@ -269,17 +366,14 @@
                 packageLi.addEventListener('click', async (ev) => {
                   ev.stopPropagation();
                   selectElement(packageLi, true);
-                  // Optionale subtile Vorfahr-Markierung (keine „selected“-Klasse!)
                   document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
-                  li.classList.add('is-ancestor'); // 'li' ist hier das Kategorieli
-
+                  li.classList.add('is-ancestor');
                   const data = await loadPackageDetails(pkg.pk);
                   if (data) await createDetailPanel(data, level + 2);
                 });
 
                 frag.appendChild(packageLi);
               });
-              // genau hier: Pakete direkt hinter den geklickten Knoten einfügen
               li.parentNode.insertBefore(frag, li.nextSibling);
             } else {
               removeDetailPanel();
@@ -288,11 +382,14 @@
             console.error(e);
           }
         }
-        // Kategorie-Panel unter dem Tree anzeigen (Name, Erzeugt am, Geändert am)
-        await createCategoryPanel(item, level + 1);      });
+
+        // Panel unten einmalig anzeigen
+        await createCategoryPanel(mergedForPanel, currentLevel + 1);
+      });
+
       ul.appendChild(li);
       if (!firstLi) firstLi = li;
-    } // end for items
+    } // end for
 
     panel.appendChild(ul);
 
@@ -318,59 +415,208 @@
       firstLi.click();
     }
   }
-  async function createCategoryPanel(categoryItem, level) {
-    // Host unter dem Tree (gleich wie bei Paketen)
-    const host = (typeof getDetailsHost === "function") ? getDetailsHost() : (function () {
-      let h = document.getElementById('package-details');
-      if (!h) {
-        h = document.createElement('div');
-        h.id = 'package-details';
-        h.className = 'package-details';
-        treeContainer.parentNode.insertBefore(h, treeContainer.nextSibling);
-      }
-      return h;
-    })();
 
-    host.innerHTML = ""; // jeweils ersetzen
+  // ---- neue Kategorie einfügen (draft) ----
+  function prepareCategoryInsert(direction /* 'before' | 'after' */) {
+    const host = getDetailsHost();
+    const refId = host.dataset.categoryId;
+    let refLi = document.querySelector(`.tree-panel li[data-id="${CSS.escape(refId)}"]:not([data-type])`);
+    if (!refLi) refLi = selectedElement;
+    if (!refLi) { alert("Keine Referenz-Kategorie gefunden."); return; }
 
-    const today = new Date();
-    const prettyToday = formatDate(today);     // "Montag, 22. September 2025"
-    const isoToday    = formatDateISO(today);  // "2025-09-22"
+    const ul = refLi.parentElement;
+    const level = parseInt(refLi.closest('.tree-panel').getAttribute('data-level'), 10) || 0;
 
-    const panel = document.createElement('div');
-    panel.className = 'detail-panel';
-    panel.setAttribute('data-level', level);
-    panel.style.marginTop = '12px';
-    panel.style.width = '100%';
-    panel.style.boxSizing = 'border-box';
+    const tmpId = `new-${Date.now()}`;
+    const li = document.createElement('li');
+    li.setAttribute('data-id', tmpId);
+    li.classList.add('draft');
 
-    // einfache, saubere Inputs (keine Speicherung – nur Anzeige/Editing UI)
-    panel.innerHTML = `    
-      <div class="detail-content">
-        <h2>Kategorie bearbeiten</h2>
-    
-        <div class="kt-form-grid">
-          <label for="cat-name">Name</label>
-          <input id="cat-name" type="text"
-                 class="kt-input kt-input--editable"
-                 value="${escapeHtml(categoryItem.fields?.text)}">
-    
-          <label>Erzeugt am</label>
-          <div id="cat-created"
-            class="kt-output"
-            aria-readonly="true"
-            tabindex="-1">${escapeHtml(prettyToday)}
-          </div>    
-          <label for="cat-changed">Geändert am</label>
-          <input id="cat-changed" type="date"
-                 class="kt-input kt-input--editable"
-                 value="${isoToday}">
-        </div>
-      </div>
-    `;
-    host.appendChild(panel);
+    const parentIdAttr = refLi.getAttribute('data-parent-id');
+    if (parentIdAttr != null) li.setAttribute('data-parent-id', parentIdAttr);
+
+    const container = document.createElement('div');
+    container.style.display = "flex";
+    container.style.alignItems = "center";
+    container.style.width = "100%";
+
+    const iconImg = document.createElement('img');
+    iconImg.src = "/static/images/knowledge_icon.webp";
+    iconImg.alt = "Knowledge Icon";
+    iconImg.className = "knowledge-icon";
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = "Neue Kategorie";
+
+    container.appendChild(iconImg);
+    container.appendChild(textSpan);
+    li.appendChild(container);
+
+    const todayISO = formatDateISO(new Date());
+    li.dataset.name = "";
+    li.dataset.created = todayISO;
+    li.dataset.changed = todayISO;
+
+    if (direction === 'before') ul.insertBefore(li, refLi);
+    else ul.insertBefore(li, refLi.nextSibling);
+
+    selectElement(li, level > 0);
+    const itemForPanel = { pk: tmpId, fields: { text: "", created: todayISO, changed: todayISO } };
+    createCategoryPanel(itemForPanel, level + 1, { mode: 'draft' });
+
+    host.dataset.mode = 'draft';
+    host.dataset.parentId = parentIdAttr ? String(parentIdAttr) : "";
   }
 
+  // ---- speichern: neue Kategorie ----
+  async function handleCategoryCreate() {
+    const host = getDetailsHost();
+    const tempId = host.dataset.categoryId;
+    const parentId = host.dataset.parentId || "";
+    const li = document.querySelector(`.tree-panel li[data-id="${CSS.escape(tempId)}"]:not([data-type])`);
+    if (!li) { alert("Entwurf nicht gefunden."); return; }
+
+    const nameEl = host.querySelector('#cat-name');
+    const changedEl = host.querySelector('#cat-changed');
+
+    const name    = (nameEl?.value || "").trim();
+    const created = host.dataset.categoryCreated || formatDateISO(new Date());
+    const changed = (changedEl?.value || formatDateISO(new Date()));
+
+    try {
+      const res = await fetch(`${API_BASE}/category/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          [CSRF_HEADER_NAME]: getCookie('csrftoken') || ''
+        },
+        body: JSON.stringify({
+          name: name || "Neue Kategorie",
+          created,
+          changed,
+          parent_id: parentId ? parseInt(parentId, 10) : null
+        })
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(()=> '');
+        throw new Error(`Anlegen fehlgeschlagen (${res.status}).\n${txt}`);
+      }
+      const data = await res.json();
+
+      // LI finalisieren
+      li.setAttribute('data-id', String(data.id));
+      li.classList.remove('draft');
+      li.dataset.name    = data.name || name || "Neue Kategorie";
+      li.dataset.created = data.created || created;
+      li.dataset.changed = data.changed || changed;
+
+      const span = li.querySelector('span');
+      if (span) span.textContent = li.dataset.name;
+
+      // Panel in edit-Modus
+      const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'), 10) || 0;
+      const merged = {
+        pk: data.id,
+        fields: {
+          text: li.dataset.name,
+          created: li.dataset.created,
+          changed: li.dataset.changed
+        }
+      };
+      await createCategoryPanel(merged, currentLevel + 1, { mode: 'edit' });
+    } catch (err) {
+      console.error(err);
+      alert('Anlegen fehlgeschlagen. Details in der Konsole.');
+    }
+  }
+
+  // ---- speichern: bestehende Kategorie ----
+  async function handleCategoryUpdate() {
+    const host = getDetailsHost();
+    const id = parseInt(host.dataset.categoryId || "", 10);
+    if (!id) { alert("Keine Kategorie im Kontext."); return; }
+
+    const nameEl    = host.querySelector('#cat-name');
+    const changedEl = host.querySelector('#cat-changed');
+    const newName     = (nameEl?.value || "").trim();
+    const newChanged  = (changedEl?.value || "").trim();
+
+    const oldName    = host.dataset.categoryName || "";
+    const oldChanged = host.dataset.categoryChanged || "";
+
+    if (newName === oldName && newChanged === oldChanged) {
+      console.log("Keine Änderungen – nichts zu speichern.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/category/${id}/`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          [CSRF_HEADER_NAME]: getCookie('csrftoken') || ''
+        },
+        body: JSON.stringify({ name: newName, changed: newChanged })
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(()=> '');
+        throw new Error(`Update fehlgeschlagen (${res.status}).\n${txt}`);
+      }
+      const data = await res.json();
+
+      // Label + dataset im Baum
+      const li = document.querySelector(`.tree-panel li[data-id="${id}"]:not([data-type])`);
+      if (li) {
+        const textSpan = li.querySelector('span');
+        li.dataset.name    = (data.name    || newName)    || '';
+        li.dataset.created = (data.created || li.dataset.created) || '';
+        li.dataset.changed = (data.changed || newChanged) || '';
+        if (textSpan) textSpan.textContent = data.name || newName;
+      }
+
+      // Panel-Kontext/Felder
+      host.dataset.categoryName    = data.name    || newName;
+      host.dataset.categoryChanged = data.changed || newChanged;
+      if (data.created) host.dataset.categoryCreated = data.created;
+
+      if (changedEl && (data.changed || newChanged)) {
+        changedEl.value = data.changed ? formatDateISO(data.changed) : newChanged;
+      }
+      const createdOut = host.querySelector('#cat-created');
+      if (createdOut && data.created) {
+        createdOut.textContent = formatDate(data.created);
+        host.dataset.categoryCreated = data.created;
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Speichern fehlgeschlagen. Details in der Konsole.");
+    }
+  }
+
+  // ---- delegation (einmal global) ----
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.kt-btn[data-action]');
+    if (!btn) return;
+    e.preventDefault();
+
+    const { scope, action } = btn.dataset;
+    if (scope === 'category') {
+      if (action === 'insert-before') { prepareCategoryInsert('before'); return; }
+      if (action === 'insert-after')  { prepareCategoryInsert('after');  return; }
+      if (action === 'update') {
+        const host = getDetailsHost();
+        if (host?.dataset.mode === 'draft') { handleCategoryCreate(); }  // Neu anlegen
+        else { handleCategoryUpdate(); }                                  // Bestehendes ändern
+        return;
+      }
+    }
+  });
+
+  // ---- boot ----
   async function init() {
     try {
       const roots = await fetchRoots();
@@ -383,6 +629,5 @@
       treeContainer.appendChild(err);
     }
   }
-
   init();
 })();
