@@ -4,19 +4,18 @@ from django.utils import timezone
 from django.db import models
 from django.utils import timezone
 
+from django.db import migrations
+
 class TreeNode(models.Model):
     text = models.CharField(max_length=255)
-    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
-
-    # NEU: Datumsfelder – editierbar (kein auto_now/auto_now_add, damit du sie im UI setzen kannst)
-    createDate = models.DateField(default=timezone.now)
-    changeDate = models.DateField(default=timezone.now)
+    parent = models.ForeignKey('self', null=True, blank=True,
+                               related_name='children', on_delete=models.CASCADE)
+    createDate = models.DateField()
+    changeDate = models.DateField()
+    sort_order = models.PositiveIntegerField(default=0, db_index=True)  # NEU
 
     class Meta:
-        ordering = ['text']
-
-    def __str__(self):
-        return self.text
+        ordering = ['sort_order', 'id']  # stabile Reihenfolge je Ebene
 
 
 class ExercisePackage(models.Model):
@@ -157,3 +156,16 @@ class KnowledgeTree:
                 self.print_tree(child, level + 1)
             for exercise_package in node.exercise_packages.all():
                 print("  " * (level + 1) + f"ExercisePackage: {exercise_package.packageName}")
+
+def init_sort_order(apps, schema_editor):
+    TreeNode = apps.get_model('packages', 'TreeNode')
+    # pro Parent eine laufende Nummer vergeben
+    for parent_id in TreeNode.objects.values_list('parent_id', flat=True).distinct():
+        siblings = TreeNode.objects.filter(parent_id=parent_id).order_by('id')
+        for idx, node in enumerate(siblings):
+            node.sort_order = idx
+            node.save(update_fields=['sort_order'])
+
+class Migration(migrations.Migration):
+    dependencies = [('packages', '000X_previous')]
+    operations = [migrations.RunPython(init_sort_order, migrations.RunPython.noop)]

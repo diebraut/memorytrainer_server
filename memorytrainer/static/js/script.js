@@ -1,11 +1,70 @@
+
 /* Knowledge-Tree (ported from memorytrainer_old, adapted to new /api endpoints) */
 (function () {
+  if (window.__KT_INIT__) {
+    console.warn('Knowledge-Tree: script already initialized – skipping second init.');
+    return;
+  }
+  window.__KT_INIT__ = true;
+
   const API_BASE = (typeof window.API_BASE === "string" && window.API_BASE) ? window.API_BASE : "/api";
 
   const treeContainer = document.getElementById('tree-container');
   if (!treeContainer) return;
 
   // ---- utils ----
+
+  // Prüft auf Duplikate im aktuell gerenderten Baum
+  function nameExistsOnLevel(name, parentId, excludeId = null) {
+    const needle = (name || '').trim().toLowerCase();
+    if (!needle) return false;
+
+    // Root-Ebene = kein data-parent-id
+    const selector = parentId
+      ? `.tree-panel li:not([data-type])[data-parent-id="${CSS.escape(String(parentId))}"]`
+      : `.tree-panel[data-level="0"] li:not([data-type]):not([data-parent-id])`;
+
+    const items = Array.from(document.querySelectorAll(selector));
+    return items.some(li => {
+      const thisId = li.getAttribute('data-id');
+      if (excludeId && String(excludeId) === String(thisId)) return false;
+      const label = (li.dataset.name || li.querySelector('span')?.textContent || '').trim().toLowerCase();
+      return label === needle;
+    });
+  }
+
+
+  function restoreLastStableSelection(fallbackId = null) {
+    const id = lastStableSelectedId || fallbackId;
+    if (!id) return;
+
+    const li = document.querySelector(`.tree-panel li[data-id="${CSS.escape(String(id))}"]`);
+    if (!li) return;
+
+    const level = parseInt(li.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+    selectElement(li, level > 0);
+
+    // Paket ausgewählt? -> Paket-Detail unten anzeigen
+    if (li.getAttribute('data-type') === 'exercise-package') {
+      const pkgId = li.getAttribute('data-id');
+      loadPackageDetails(pkgId)
+        .then(data => { if (data) createDetailPanel(data, level + 2); })
+        .catch(console.error);
+      return;
+    }
+
+    // Kategorie ausgewählt -> Kategorie-Panel aus den aktuellen dataset-Werten rendern
+    const mergedForPanel = {
+      pk: isNaN(+id) ? id : +id,
+      fields: {
+        text:    li.dataset.name    || li.querySelector('span')?.textContent || '',
+        created: li.dataset.created || '',
+        changed: li.dataset.changed || '',
+      }
+    };
+    createCategoryPanel(mergedForPanel, level + 1, { mode: 'edit' });
+  }
+
   function getCookie(name) {
     const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
     return m ? decodeURIComponent(m.pop()) : null;
@@ -24,6 +83,7 @@
   }
 
   let selectedElement = null;
+  let lastStableSelectedId = null; // ID des zuletzt stabil ausgewählten Elements (kein Draft)
 
   function selectElement(li, isChildClick = false) {
     if (selectedElement) {
@@ -36,6 +96,11 @@
     }
     li.classList.add('selected');
     selectedElement = li;
+
+    // Nur „stabile“ Auswahl merken (also keine Entwürfe)
+    if (!li.classList.contains('draft')) {
+      lastStableSelectedId = li.getAttribute('data-id') || null;
+    }
   }
 
   function removeDetailPanel() {
@@ -134,18 +199,24 @@
     return arr.map(n => ({
       pk: n.id,
       fields: { text: n.name, created: n.created, changed: n.changed },
-      children_count: n.children_count, pkg_count: n.pkg_count
+      children_count: n.children_count,
+      pkg_count: n.pkg_count,
+      sort_order: n.sort_order,                  // <—
     }));
   }
+
   async function fetchSubcategories(categoryId) {
     const data = await fetchJSON(`${API_BASE}/get_subcategories/${encodeURIComponent(categoryId)}/`);
     const arr = Array.isArray(data) ? data : (data.subcategories || []);
     return arr.map(n => ({
       pk: n.id,
       fields: { text: n.name, created: n.created, changed: n.changed },
-      children_count: n.children_count, pkg_count: n.pkg_count
+      children_count: n.children_count,
+      pkg_count: n.pkg_count,
+      sort_order: n.sort_order,                  // <—
     }));
   }
+
   async function fetchPackages(categoryId, subId) {
     const data = await fetchJSON(`${API_BASE}/get_details/${encodeURIComponent(categoryId)}/${encodeURIComponent(subId)}/`);
     const items =
@@ -227,10 +298,23 @@
     host.appendChild(panel);
 
     // Draft: Insert-Buttons verbergen
+    // Draft: Insert-Buttons & Löschen ausblenden, "Verwerfen" hinzufügen
     if (isDraft) {
-      panel.querySelectorAll(
-        '[data-scope="category"][data-action="insert-before"],[data-action="insert-after"]'
-      ).forEach(b => { b.style.display = 'none'; });
+      const actions = panel.querySelector('.kt-actions');
+      // Buttons ausblenden, die im Draft keinen Sinn machen
+      actions.querySelectorAll(
+        '[data-action="insert-before"], [data-action="insert-after"], [data-action="delete"]'
+      ).forEach(b => b.style.display = 'none');
+    
+      // Verwerfen-Button einfügen
+      const discardBtn = document.createElement('button');
+      discardBtn.type = 'button';
+      discardBtn.className = 'kt-btn';
+      discardBtn.dataset.scope = 'category';
+      discardBtn.dataset.action = 'discard';
+      discardBtn.textContent = 'Verwerfen';
+      // hübsch links platzieren
+      actions.insertBefore(discardBtn, actions.firstChild);
     }
   }
 
@@ -241,8 +325,9 @@
     panel.setAttribute('data-level', level);
 
     const ul = document.createElement('ul');
-    items.sort((a, b) => a.pk - b.pk);
-
+    if (items.length && typeof items[0].sort_order === 'number') {
+      items.sort((a,b) => a.sort_order - b.sort_order);
+    }
     let firstLi = null;
 
     for (const item of items) {
@@ -271,6 +356,8 @@
       li.dataset.name    = item.fields?.text     || '';
       li.dataset.created = item.fields?.created  || '';
       li.dataset.changed = item.fields?.changed  || '';
+      li.dataset.childrenCount = String(item.children_count ?? 0);
+      li.dataset.pkgCount      = String(item.pkg_count ?? 0);
 
       const hasChildren = (typeof item.children_count === 'number') ? item.children_count > 0 : false;
       if (hasChildren) {
@@ -283,6 +370,7 @@
       // --- click handler (bereinigt) ---
       li.addEventListener('click', async (event) => {
         event.stopPropagation();
+        discardDraftIfOther(li);
 
         const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'), 10);
         selectElement(li, currentLevel > 0);
@@ -364,6 +452,7 @@
                 packageLi.appendChild(packageContainer);
 
                 packageLi.addEventListener('click', async (ev) => {
+                  discardDraftIfOther(null);
                   ev.stopPropagation();
                   selectElement(packageLi, true);
                   document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
@@ -431,6 +520,8 @@
     const li = document.createElement('li');
     li.setAttribute('data-id', tmpId);
     li.classList.add('draft');
+    li.dataset.childrenCount = "0";
+    li.dataset.pkgCount = "0";
 
     const parentIdAttr = refLi.getAttribute('data-parent-id');
     if (parentIdAttr != null) li.setAttribute('data-parent-id', parentIdAttr);
@@ -460,28 +551,68 @@
     if (direction === 'before') ul.insertBefore(li, refLi);
     else ul.insertBefore(li, refLi.nextSibling);
 
+    host.dataset.prevSelectedId = lastStableSelectedId || '';
+    host.dataset.refId = refLi.getAttribute('data-id') || '';
+
     selectElement(li, level > 0);
     const itemForPanel = { pk: tmpId, fields: { text: "", created: todayISO, changed: todayISO } };
     createCategoryPanel(itemForPanel, level + 1, { mode: 'draft' });
 
     host.dataset.mode = 'draft';
     host.dataset.parentId = parentIdAttr ? String(parentIdAttr) : "";
+    host.dataset.insertDirection = direction;                 // 'before' | 'after'
+    host.dataset.refId = refLi.getAttribute('data-id') || ''; // referenzierter Nachbar
   }
 
   // ---- speichern: neue Kategorie ----
+  // Ersetzt deine bestehende handleCategoryCreate
   async function handleCategoryCreate() {
     const host = getDetailsHost();
-    const tempId = host.dataset.categoryId;
-    const parentId = host.dataset.parentId || "";
+    const tempId   = host.dataset.categoryId;          // z. B. "new-1727..."
+    const parentId = host.dataset.parentId || "";      // "" => Root
+    const refIdStr = host.dataset.refId || "";         // Referenz-Knoten für before/after
+    const direction = host.dataset.insertDirection || null; // 'before' | 'after' | null
+
+    // Draft-LI finden
     const li = document.querySelector(`.tree-panel li[data-id="${CSS.escape(tempId)}"]:not([data-type])`);
     if (!li) { alert("Entwurf nicht gefunden."); return; }
 
-    const nameEl = host.querySelector('#cat-name');
+    // Formular-Werte
+    const nameEl    = host.querySelector('#cat-name');
     const changedEl = host.querySelector('#cat-changed');
 
     const name    = (nameEl?.value || "").trim();
     const created = host.dataset.categoryCreated || formatDateISO(new Date());
     const changed = (changedEl?.value || formatDateISO(new Date()));
+
+    // Pflichtfeld: Name
+    if (!name) {
+      alert("Name muss angegeben werden");
+      if (nameEl) nameEl.focus();
+      return;
+    }
+
+    // Duplikatscheck im UI (gleiche Ebene: gleicher parent)
+    if (typeof nameExistsOnLevel === 'function') {
+      const dup = nameExistsOnLevel(name, parentId || null, null);
+      if (dup) {
+        alert("Name existiert auf dieser Ebene bereits.");
+        if (nameEl) nameEl.focus();
+        return;
+      }
+    }
+
+    // Request-Payload
+    const payload = {
+      name,
+      created,
+      changed,
+      parent_id: parentId ? parseInt(parentId, 10) : null
+    };
+    if (direction && refIdStr) {
+      payload.direction = direction;                         // 'before' | 'after'
+      payload.ref_id    = parseInt(refIdStr, 10);            // Referenz-Kategorie
+    }
 
     try {
       const res = await fetch(`${API_BASE}/category/`, {
@@ -492,43 +623,135 @@
           'Content-Type': 'application/json',
           [CSRF_HEADER_NAME]: getCookie('csrftoken') || ''
         },
-        body: JSON.stringify({
-          name: name || "Neue Kategorie",
-          created,
-          changed,
-          parent_id: parentId ? parseInt(parentId, 10) : null
-        })
+        body: JSON.stringify(payload)
       });
+
+      // Server meldet Duplikat hart mit 409?
+      if (res.status === 409) {
+        alert("Name existiert auf dieser Ebene bereits.");
+        if (nameEl) nameEl.focus();
+        return;
+      }
+
       if (!res.ok) {
         const txt = await res.text().catch(()=> '');
         throw new Error(`Anlegen fehlgeschlagen (${res.status}).\n${txt}`);
       }
-      const data = await res.json();
 
-      // LI finalisieren
+      const data = await res.json(); // erwartet: {id, name, created, changed, children_count, pkg_count, sort_order}
+
+      // Draft-LI finalisieren
       li.setAttribute('data-id', String(data.id));
       li.classList.remove('draft');
-      li.dataset.name    = data.name || name || "Neue Kategorie";
+
+      li.dataset.name    = data.name    || name;
       li.dataset.created = data.created || created;
       li.dataset.changed = data.changed || changed;
+      li.dataset.childrenCount = String(data.children_count ?? li.dataset.childrenCount ?? 0);
+      li.dataset.pkgCount      = String(data.pkg_count      ?? li.dataset.pkgCount      ?? 0);
+      li.dataset.sortOrder     = String(data.sort_order     ?? li.dataset.sortOrder     ?? 0);
 
       const span = li.querySelector('span');
       if (span) span.textContent = li.dataset.name;
 
-      // Panel in edit-Modus
-      const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'), 10) || 0;
+      // Host-Kontext auf "edit" umstellen
+      host.dataset.mode            = 'edit';
+      host.dataset.categoryId      = String(data.id);
+      host.dataset.categoryName    = li.dataset.name;
+      host.dataset.categoryCreated = li.dataset.created;
+      host.dataset.categoryChanged = li.dataset.changed;
+      // Einfüge-Metas aufräumen (optional)
+      delete host.dataset.insertDirection;
+      delete host.dataset.refId;
+
+      // Auswahl beibehalten & Panel neu rendern
+      const level = parseInt(li.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+      selectElement(li, level > 0);
+
       const merged = {
         pk: data.id,
         fields: {
-          text: li.dataset.name,
+          text:    li.dataset.name,
           created: li.dataset.created,
           changed: li.dataset.changed
         }
       };
-      await createCategoryPanel(merged, currentLevel + 1, { mode: 'edit' });
+      await createCategoryPanel(merged, level + 1, { mode: 'edit' });
+
     } catch (err) {
       console.error(err);
       alert('Anlegen fehlgeschlagen. Details in der Konsole.');
+    }
+  }
+
+  async function handleCategoryDelete() {
+    const host = getDetailsHost();
+    const mode = host.dataset.mode || 'edit';
+    const idStr = host.dataset.categoryId;
+
+    // Draft? → nur verwerfen
+    if (mode === 'draft') {
+      if (!confirm('Entwurf verwerfen?')) return;
+      const li = document.querySelector(`.tree-panel li[data-id="${CSS.escape(idStr)}"]:not([data-type])`);
+      if (li) li.remove();
+      host.innerHTML = '';
+      if (selectedElement && selectedElement.getAttribute('data-id') === idStr) {
+        selectedElement = null;
+      }
+      return;
+    }
+
+    const id = parseInt(idStr || '', 10);
+    if (!id) { alert('Keine Kategorie im Kontext.'); return; }
+
+    const li = document.querySelector(`.tree-panel li[data-id="${id}"]:not([data-type])`);
+    if (!li) { alert('Kategorie nicht gefunden.'); return; }
+
+    // Warnhinweis mit Counts
+    const ch = parseInt(li.dataset.childrenCount || '0', 10);
+    const pk = parseInt(li.dataset.pkgCount || '0', 10);
+    let msg = 'Kategorie wirklich löschen? Dies kann nicht rückgängig gemacht werden.';
+    if (ch > 0 || pk > 0) {
+      msg += `\n\nAchtung: Diese Kategorie enthält ${ch} Unterkategorie(n) und ${pk} Paket(e).`;
+    }
+    if (!confirm(msg)) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/category/${id}/`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          [CSRF_HEADER_NAME]: getCookie('csrftoken') || ''
+        }
+      });
+      if (!res.ok && res.status !== 204) {
+        const txt = await res.text().catch(()=>'');
+        throw new Error(`Löschen fehlgeschlagen (${res.status}).\n${txt}`);
+      }
+
+      // DOM aufräumen
+      const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'), 10) || 0;
+
+      // ggf. eingehängte Paket-Zeilen dieses Knotens entfernen
+      document.querySelectorAll(`.tree-panel li[data-type="exercise-package"][data-parent-id="${id}"]`)
+        .forEach(n => n.remove());
+
+      // Panels rechts vom aktuellen Level schließen
+      document.querySelectorAll('.tree-panel').forEach(p => {
+        const lvl = parseInt(p.getAttribute('data-level'), 10);
+        if (lvl > currentLevel) p.remove();
+      });
+
+      // Knoten entfernen
+      li.remove();
+      host.innerHTML = '';
+      if (selectedElement && selectedElement.getAttribute('data-id') === String(id)) {
+        selectedElement = null;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Löschen fehlgeschlagen. Details in der Konsole.');
     }
   }
 
@@ -538,13 +761,29 @@
     const id = parseInt(host.dataset.categoryId || "", 10);
     if (!id) { alert("Keine Kategorie im Kontext."); return; }
 
+    const li = document.querySelector(`.tree-panel li[data-id="${id}"]:not([data-type])`);
+    if (!li) { alert("Kategorie nicht gefunden."); return; }
+    const parentId = li.getAttribute('data-parent-id') || null;
+
     const nameEl    = host.querySelector('#cat-name');
     const changedEl = host.querySelector('#cat-changed');
     const newName     = (nameEl?.value || "").trim();
     const newChanged  = (changedEl?.value || "").trim();
-
     const oldName    = host.dataset.categoryName || "";
     const oldChanged = host.dataset.categoryChanged || "";
+
+    if (!newName) {
+      alert("Name muss angegeben werden");
+      nameEl?.focus();
+      return;
+    }
+
+    // ➜ NEU: Duplikatscheck (außer eigener Knoten)
+    if (nameExistsOnLevel(newName, parentId, id)) {
+      alert("Name existiert auf dieser Ebene bereits.");
+      nameEl?.focus();
+      return;
+    }
 
     if (newName === oldName && newChanged === oldChanged) {
       console.log("Keine Änderungen – nichts zu speichern.");
@@ -562,28 +801,32 @@
         },
         body: JSON.stringify({ name: newName, changed: newChanged })
       });
+
+      if (res.status === 409) {
+        alert("Name existiert auf dieser Ebene bereits.");
+        nameEl?.focus();
+        return;
+      }
+
       if (!res.ok) {
         const txt = await res.text().catch(()=> '');
         throw new Error(`Update fehlgeschlagen (${res.status}).\n${txt}`);
       }
       const data = await res.json();
 
-      // Label + dataset im Baum
-      const li = document.querySelector(`.tree-panel li[data-id="${id}"]:not([data-type])`);
-      if (li) {
-        const textSpan = li.querySelector('span');
-        li.dataset.name    = (data.name    || newName)    || '';
-        li.dataset.created = (data.created || li.dataset.created) || '';
-        li.dataset.changed = (data.changed || newChanged) || '';
-        if (textSpan) textSpan.textContent = data.name || newName;
-      }
+      const textSpan = li.querySelector('span');
+      li.dataset.name    = (data.name    || newName)    || '';
+      li.dataset.created = (data.created || li.dataset.created) || '';
+      li.dataset.changed = (data.changed || newChanged) || '';
+      li.dataset.childrenCount = String(data.children_count ?? li.dataset.childrenCount ?? 0);
+      li.dataset.pkgCount      = String(data.pkg_count      ?? li.dataset.pkgCount      ?? 0);
+      if (textSpan) textSpan.textContent = data.name || newName;
 
-      // Panel-Kontext/Felder
       host.dataset.categoryName    = data.name    || newName;
       host.dataset.categoryChanged = data.changed || newChanged;
       if (data.created) host.dataset.categoryCreated = data.created;
 
-      if (changedEl && (data.changed || newChanged)) {
+      if (data.changed || newChanged) {
         changedEl.value = data.changed ? formatDateISO(data.changed) : newChanged;
       }
       const createdOut = host.querySelector('#cat-created');
@@ -597,11 +840,11 @@
     }
   }
 
-  // ---- delegation (einmal global) ----
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.kt-btn[data-action]');
     if (!btn) return;
     e.preventDefault();
+    e.stopPropagation(); // kleine Extra-Sicherheit
 
     const { scope, action } = btn.dataset;
     if (scope === 'category') {
@@ -609,12 +852,80 @@
       if (action === 'insert-after')  { prepareCategoryInsert('after');  return; }
       if (action === 'update') {
         const host = getDetailsHost();
-        if (host?.dataset.mode === 'draft') { handleCategoryCreate(); }  // Neu anlegen
-        else { handleCategoryUpdate(); }                                  // Bestehendes ändern
+        if (host?.dataset.mode === 'draft') { handleCategoryCreate(); }
+        else { handleCategoryUpdate(); }
+        return;
+      }
+      if (action === 'discard') {      // <— NEU
+        discardDraftCategory();
+        return;
+      }
+      if (action === 'delete') {       // (falls schon implementiert)
+        handleCategoryDelete && handleCategoryDelete();
         return;
       }
     }
   });
+
+  function discardDraftIfOther(clickedLi) {
+    const draftLi = document.querySelector('.tree-panel li.draft');
+    if (!draftLi) return;
+    if (clickedLi && draftLi === clickedLi) return; // eigener Draft -> behalten
+
+    // Host leeren, wenn Panel im Draft-Modus war
+    const host = getDetailsHost();
+    if (host.dataset.mode === 'draft') {
+      host.innerHTML = '';
+      host.dataset.mode = 'edit';
+      delete host.dataset.categoryId;
+      delete host.dataset.parentId;
+      delete host.dataset.categoryName;
+      delete host.dataset.categoryCreated;
+      delete host.dataset.categoryChanged;
+    }
+    draftLi.remove();
+
+    // ... host reset & selectedElement reset wie gehabt ...
+    const fallbackId = host.dataset.prevSelectedId || host.dataset.refId || '';
+    // Wenn wir gerade auf einen anderen Knoten klicken, übernimmt DER die Auswahl.
+    // Nur wenn NICHT geklickt wurde (z. B. Verwerfen), selektieren wir die alte Auswahl.
+    if (!clickedLi) {
+      restoreLastStableSelection(fallbackId);
+    }
+  }
+
+  function discardDraftCategory() {
+    const host = getDetailsHost();
+    const draftId = host.dataset.mode === 'draft' ? host.dataset.categoryId : null;
+    const draftSel = draftId
+      ? `.tree-panel li.draft[data-id="${CSS.escape(draftId)}"]`
+      : '.tree-panel li.draft';
+    const draftLi = document.querySelector(draftSel);
+    if (!draftLi) return;
+
+    // Draft entfernen
+    draftLi.remove();
+
+    // Detailbereich bereinigen
+    host.innerHTML = '';
+    host.dataset.mode = 'edit';
+    const prevId = host.dataset.prevSelectedId || host.dataset.refId || '';
+
+    // Context-Attribute aufräumen
+    delete host.dataset.categoryId;
+    delete host.dataset.parentId;
+    delete host.dataset.prevSelectedId;
+    delete host.dataset.refId;
+    delete host.dataset.categoryName;
+    delete host.dataset.categoryCreated;
+    delete host.dataset.categoryChanged;
+
+    if (selectedElement === draftLi) selectedElement = null;
+
+    // Letzte stabile Auswahl & Panel wiederherstellen
+    restoreLastStableSelection(prevId);
+  }
+
 
   // ---- boot ----
   async function init() {
