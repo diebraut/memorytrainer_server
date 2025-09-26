@@ -1,5 +1,3 @@
-from django.db import models
-from django.utils import timezone
 
 from django.db import models
 from django.utils import timezone
@@ -23,6 +21,7 @@ class ExercisePackage(models.Model):
     packageDescription = models.TextField()
     createDate = models.DateField(default=timezone.now)
     changeDate = models.DateField(default=timezone.now)
+    sort_order = models.IntegerField(default=0, db_index=True)
     treeNode = models.ForeignKey(
         TreeNode,
         on_delete=models.CASCADE,
@@ -30,7 +29,7 @@ class ExercisePackage(models.Model):
     )
 
     class Meta:
-        ordering = ['packageName']
+        ordering = ['sort_order', 'id']
 
     def __str__(self):
         return self.packageName
@@ -169,3 +168,4 @@ def init_sort_order(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [('packages', '000X_previous')]
     operations = [migrations.RunPython(init_sort_order, migrations.RunPython.noop)]
+

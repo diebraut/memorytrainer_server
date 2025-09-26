@@ -684,5 +684,70 @@ h1 {
   .kt-btn--danger  { background: rgba(190,18,60,.18); border-color: rgba(248,113,113,.5); color: #fecaca; }
 }
 
+/* Grid: Labels (links), Felder (rechts), einheitliche Breiten */
+.kt-form-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;  /* 1: Labels, 2: Inputs/Textareas */
+  column-gap: 16px;
+  row-gap: 10px;
+  align-items: start;                 /* Label/Text oben ausrichten */
+}
 
-/* Optional: Wenn dir 2px Padding zu breit ist, nimm 1px */
+/* Alle Eingabefelder (inkl. Textarea) gleich breit */
+.kt-form-grid .kt-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Textarea-Größe/Verhalten */
+.kt-form-grid textarea.kt-input {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* Absetzer vor der Beschreibung, bleibt im Grid */
+.kt-form-grid .kt-spacer {
+  grid-column: 1 / -1;  /* über beide Spalten */
+  height: 12px;
+}
+/* --- Harte Ausrichtung im Details-Bereich (überschreibt ältere Regeln) --- */
+#package-details .kt-form-grid {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr); /* 1: Labels, 2: Felder */
+  column-gap: 16px;
+  row-gap: 10px;
+  align-items: start;       /* alles oben ausrichten */
+}
+
+/* Labels stets in Spalte 1 */
+#package-details .kt-form-grid > label {
+  grid-column: 1 / 2;
+  justify-self: start;
+  align-self: start;
+  display: block;           /* verhindert Inline-Verschiebungen */
+  margin: 0;
+}
+
+/* Alle Felder (Input, Output, Textarea) strikt in Spalte 2, volle Breite */
+#package-details .kt-form-grid > input.kt-input,
+#package-details .kt-form-grid > .kt-output,
+#package-details .kt-form-grid > textarea.kt-input {
+  grid-column: 2 / 3;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* Abstand vor der Beschreibung – bleibt zeilenbündig im Grid */
+#package-details .kt-form-grid .kt-spacer {
+  grid-column: 1 / -1;
+  height: 12px;
+}
+
+/* Optional: Textarea-Grundhöhe & Resize-Verhalten vereinheitlichen */
+#package-details .kt-form-grid > textarea.kt-input {
+  min-height: 120px;
+  resize: vertical;
+}
+/* optional statt Inline-Styling */
+.pkg-badge { margin-left:auto; font-size:12px; padding:2px 6px; border-radius:10px; background:#eef; color:#333; }

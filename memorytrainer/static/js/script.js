@@ -14,6 +14,95 @@
 
   // ---- utils ----
 
+  // Paket-Klick binden (wie im createPanel)
+  function bindPackageClick(li, pkgId, categoryLi) {
+    li.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      discardDraftIfOther(li);
+      selectElement(li, true);
+
+      // Eltern-Unterkategorie als Ancestor markieren
+      document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+      if (categoryLi) categoryLi.classList.add('is-ancestor');
+
+      const levelBase = parseInt(categoryLi?.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+      const data = await loadPackageDetails(pkgId);
+      if (data) await createDetailPanel(data, levelBase + 2);
+    });
+  }
+
+  // Pakete unter einer Unterkategorie neu rendern und optional ein Paket auswählen
+  async function rerenderPackagesForCategory(categoryLi, selectPkgId = null) {
+    if (!categoryLi) return;
+
+    const subId     = parseInt(categoryLi.getAttribute('data-id') || '0', 10);
+    const parentId  = categoryLi.getAttribute('data-parent-id'); // kann null sein, aber für Pakete ist es gesetzt
+    const ul        = categoryLi.parentElement;
+
+    // alte Paket-Zeilen für diese Unterkategorie entfernen
+    ul.querySelectorAll(`li[data-type="exercise-package"][data-parent-id="${CSS.escape(String(subId))}"]`).forEach(n => n.remove());
+
+    // Pakete neu laden
+    const pkgs = await fetchPackages(parseInt(parentId || '0', 10), subId);
+    if (!Array.isArray(pkgs) || pkgs.length === 0) return;
+
+    const frag = document.createDocumentFragment();
+    let liToSelect = null;
+
+    const levelBase = parseInt(categoryLi.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+
+    pkgs.forEach(pkg => {
+      const packageLi = document.createElement('li');
+      packageLi.setAttribute('data-id', pkg.pk);
+      packageLi.setAttribute('data-type', 'exercise-package');
+      packageLi.setAttribute('data-parent-id', String(subId));
+      if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
+
+      const packageContainer = document.createElement('div');
+      packageContainer.style.display   = "flex";
+      packageContainer.style.alignItems= "center";
+      packageContainer.style.width     = "100%";
+
+      const packageIconImg = document.createElement('img');
+      packageIconImg.src = "/static/images/package_icon.webp";
+      packageIconImg.alt = "Package Icon";
+      packageIconImg.className = "knowledge-icon";
+
+      const packageTextSpan = document.createElement('span');
+      packageTextSpan.textContent = pkg.fields.packageName;
+
+      packageContainer.appendChild(packageIconImg);
+      packageContainer.appendChild(packageTextSpan);
+      packageLi.appendChild(packageContainer);
+
+      bindPackageClick(packageLi, pkg.pk, categoryLi);
+
+      if (selectPkgId && String(selectPkgId) === String(pkg.pk)) {
+        liToSelect = packageLi;
+      }
+
+      frag.appendChild(packageLi);
+    });
+
+    // direkt unter die Kategorie hängen
+    categoryLi.parentNode.insertBefore(frag, categoryLi.nextSibling);
+
+    // ggf. das gewünschte Paket auswählen und Panel aufmachen
+    if (liToSelect) {
+      // Ancestor setzen
+      document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+      categoryLi.classList.add('is-ancestor');
+
+      selectElement(liToSelect, true);
+      const data = await loadPackageDetails(selectPkgId);
+      if (data) await createDetailPanel(data, levelBase + 2);
+    }
+  }
+
+  function isPackageSelected() {
+    return !!(selectedElement && selectedElement.getAttribute('data-type') === 'exercise-package');
+  }
+
   // Prüft auf Duplikate im aktuell gerenderten Baum
   function nameExistsOnLevel(name, parentId, excludeId = null) {
     const needle = (name || '').trim().toLowerCase();
@@ -62,7 +151,7 @@
         changed: li.dataset.changed || '',
       }
     };
-    createCategoryPanel(mergedForPanel, level + 1, { mode: 'edit' });
+    createCategoryPanel(mergedForPanel, level + 1, { mode: 'edit'});
   }
 
   function getCookie(name) {
@@ -141,52 +230,117 @@
       const txt = await res.text().catch(()=> ''); throw new Error(`HTTP ${res.status}: ${url}\n${txt}`);
     }
     return res.json();
-  }
+    }
 
   // ---- package details (unten) ----
   async function createDetailPanel(packageData, level) {
+    // vorhandenes Panel entfernen
     removeDetailPanel();
 
-    const detailPanel = document.createElement('div');
-    detailPanel.className = 'detail-panel';
-    detailPanel.setAttribute('data-level', level);
-    detailPanel.style.marginTop = '12px';
-    detailPanel.style.width = '100%';
-    detailPanel.style.boxSizing = 'border-box';
-
-    const detailContent = document.createElement('div');
-    detailContent.className = 'detail-content';
-    const formattedCreateDate = formatDate(packageData.created);
-    const formattedChangeDate = formatDate(packageData.changed);
-
-    detailContent.innerHTML = `
-      <h2>Packagebeschreibung</h2>
-      <h3 class="package-title">${packageData.title ?? 'Paket'}</h3>
-      <p class="description">${packageData.desc ?? ''}</p>
-      <div class="divider"></div>
-      <div class="info-grid">
-        <div class="labels">
-          <p class="date-label">Erstellt</p>
-          <p class="date-label">Geändert</p>
-        </div>
-        <div class="date-values">
-          <p class="date-value">${formattedCreateDate}</p>
-          <p class="date-value">${formattedChangeDate}</p>
-        </div>
-      </div>
-
-      <div class="kt-actions" role="group" aria-label="Paket-Aktionen">
-        <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-before">Neues Paket (davor)</button>
-        <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-after">Neues Paket (danach)</button>
-        <button type="button" class="kt-btn kt-btn--primary" data-scope="package" data-action="update">Paket ändern</button>
-        <button type="button" class="kt-btn kt-btn--danger"  data-scope="package" data-action="delete">Paket löschen</button>
-      </div>
-    `;
-    detailPanel.appendChild(detailContent);
-
     const host = getDetailsHost();
+
+    // Ist das ein Draft? -> entweder hat der Host schon "draft" stehen ODER die ID ist eine temp-ID
+    const draftByHost = (host.dataset.mode === 'draft');
+    const draftById   = String(packageData.id || '').startsWith('pkg-new-');
+    const isDraft     = draftByHost || draftById;
+
+    // Panel neu aufbauen
     host.innerHTML = '';
-    host.appendChild(detailPanel);
+    host.dataset.panelOwner = `package:${packageData.id ?? ''}`;
+
+    // Kontext setzen (ID/Name/Daten)
+    host.dataset.packageId      = String(packageData.id || '');
+    host.dataset.packageName    = packageData.title   || '';
+    host.dataset.packageCreated = packageData.created || '';
+    host.dataset.packageChanged = packageData.changed || '';
+    host.dataset.mode           = isDraft ? 'draft' : 'edit';
+
+    // nodeId sicher mitschreiben (für Neu-Anlage / Speichern)
+    // Reihenfolge der Quellen: Host (falls schon gesetzt) -> Daten vom Server -> markierte Unterkategorie
+    const fallbackNodeId =
+      document.querySelector('.tree-panel li.is-ancestor')?.getAttribute('data-id') || '';
+    host.dataset.nodeId = String(
+      host.dataset.nodeId ||
+      (packageData.node && packageData.node.id) ||
+      fallbackNodeId ||
+      ''
+    );
+
+    // Einfüge-Metadaten zurücksetzen (werden bei Insert neu gesetzt)
+    delete host.dataset.insertDirection;
+    delete host.dataset.refPkgId;
+
+    const createdPretty = packageData.created ? formatDate(packageData.created) : '';
+    const changedISO    = packageData.changed ? formatDateISO(packageData.changed)
+                                              : formatDateISO(new Date());
+    const actionLabel   = isDraft ? 'Neu anlegen' : 'Paket ändern';
+
+    const panel = document.createElement('div');
+    panel.className = 'detail-panel';
+    panel.setAttribute('data-level', level);
+    panel.style.marginTop = '12px';
+    panel.style.width = '100%';
+    panel.style.boxSizing = 'border-box';
+
+    panel.innerHTML = `
+        <div class="detail-content">
+          <h2>Packagebeschreibung</h2>
+    
+          <div class="kt-form-grid">
+            <label for="pkg-name">Name</label>
+            <input id="pkg-name" type="text"
+                   class="kt-input kt-input--editable"
+                   value="${escapeHtml(packageData.title || '')}">
+    
+            <label>Erzeugt am</label>
+            <div id="pkg-created" class="kt-output" aria-readonly="true" tabindex="-1">
+              ${escapeHtml(createdPretty)}
+            </div>
+    
+            <label for="pkg-changed">Geändert am</label>
+            <input id="pkg-changed" type="date"
+                   class="kt-input kt-input--editable"
+                   value="${escapeHtml(changedISO)}">
+    
+            <!-- etwas Luft vor der Beschreibung, aber im Grid -->
+            <div class="kt-spacer" aria-hidden="true"></div>
+    
+            <!-- Label in Spalte 1, Textarea in Spalte 2 -->
+            <label for="pkg-desc">Inhaltsbeschreibung</label>
+            <textarea id="pkg-desc"
+                      class="kt-input kt-input--editable"
+                      rows="6"></textarea>
+          </div>
+    
+          <div class="kt-actions" role="group" aria-label="Paket-Aktionen">
+            <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-before">Neues Paket (davor)</button>
+            <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-after">Neues Paket (danach)</button>
+            <button type="button" class="kt-btn kt-btn--primary" data-scope="package" data-action="update">${actionLabel}</button>
+            <button type="button" class="kt-btn kt-btn--danger"  data-scope="package" data-action="delete">Paket löschen</button>
+          </div>
+        </div>
+      `;
+
+    // Beschreibungstext sicher einsetzen (nach dem Einfügen)
+    const descEl = panel.querySelector('#pkg-desc');
+    if (descEl) descEl.value = packageData.desc || '';
+
+    // Wenn Draft: Insert-/Delete-Buttons ausblenden
+    if (isDraft) {
+      const actions = panel.querySelector('.kt-actions');
+      actions.querySelectorAll(
+        '[data-action="insert-before"], [data-action="insert-after"], [data-action="delete"]'
+      ).forEach(b => b.style.display = 'none');
+      const discardBtn = document.createElement('button');
+      discardBtn.type = 'button';
+      discardBtn.className = 'kt-btn';
+      discardBtn.dataset.scope = 'package';
+      discardBtn.dataset.action = 'discard';
+      discardBtn.textContent = 'Verwerfen';
+      actions.insertBefore(discardBtn, actions.firstChild);
+    }
+
+    host.appendChild(panel);
   }
 
   // ---- data fetchers ----
@@ -217,28 +371,67 @@
     }));
   }
 
+  // Pakete einer Unterkategorie laden – mit sort_order
   async function fetchPackages(categoryId, subId) {
-    const data = await fetchJSON(`${API_BASE}/get_details/${encodeURIComponent(categoryId)}/${encodeURIComponent(subId)}/`);
-    const items =
-      Array.isArray(data?.items)    ? data.items :
-      Array.isArray(data?.packages) ? data.packages :
-      Array.isArray(data)           ? data : [];
-    return items.map(p => ({
-      pk: p.id,
-      fields: {
-        packageName: p.title,
-        packageDescription: p.desc,
-        createDate: p.created,
-        changeDate: p.changed
-      }
-    }));
-  }
+    const url = `${API_BASE}/get_details/${encodeURIComponent(categoryId)}/${encodeURIComponent(subId)}/`;
+    const data = await fetchJSON(url);
+
+    // verschiedene mögliche Response-Formen tolerieren
+    let raw = Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.packages)
+        ? data.packages
+        : Array.isArray(data)
+          ? data
+          : [];
+
+    // Normalisieren + sort_order ziehen/parsen
+    let items = raw.map((p, idx) => {
+      const soRaw =
+        p.sort_order ??            // bevorzugt
+        p.sortOrder ??             // fallback key
+        null;
+
+      const so = (typeof soRaw === 'number')
+        ? soRaw
+        : (typeof soRaw === 'string' && soRaw.trim() !== '' ? parseInt(soRaw, 10) : null);
+
+      return {
+        pk: p.id,
+        sort_order: Number.isFinite(so) ? so : idx, // fallback: aktuelle Reihenfolge
+        fields: {
+          packageName: p.title ?? p.packageName ?? '',
+          packageDescription: p.desc ?? p.packageDescription ?? '',
+          createDate: p.created ?? p.createDate ?? '',
+          changeDate: p.changed ?? p.changeDate ?? ''
+        }
+      };
+    });
+
+  // Frontend-seitig stabil sortieren (falls Backend es noch nicht tut)
+  items.sort((a, b) => {
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+    // sekundär nach id, um Stabilität zu garantieren
+    return (a.pk ?? 0) - (b.pk ?? 0);
+  });
+
+  return items;
+}
 
   // ---- category panel (unten) ----
-  async function createCategoryPanel(categoryItem, level, opts = {}) {
+   async function createCategoryPanel(categoryItem, level, opts = {}) {
     const isDraft = opts.mode === 'draft';
     const host = getDetailsHost();
-    host.innerHTML = "";
+    // erst prüfen, ob ein Paket gerade "Owner" ist
+    if (!opts?.force) {
+      const owner = host.dataset.panelOwner || '';
+      if (owner.startsWith('package:') && isPackageSelected()) {
+        return; // Paket hat Vorrang – NICHTS leeren!
+      }
+    }
+    // jetzt ist Rendern erlaubt -> altes Panel leeren
+    host.innerHTML = "";    // Ab jetzt gehört das Panel der Kategorie
+    host.dataset.panelOwner = `category:${String(categoryItem.pk)}`;
 
     // Host-Kontext
     host.dataset.categoryId = String(categoryItem.pk);
@@ -295,6 +488,32 @@
         </div>
       </div>
     `;
+    // Falls diese Kategorie noch KEINE Unterkategorien hat -> Button "Neue Unterkategorie" anzeigen
+    if (!isDraft) {
+      const catLi = document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(String(categoryItem.pk))}"]`);
+      const childrenCount = parseInt(catLi?.dataset.childrenCount || '0', 10);
+      if (childrenCount === 0) {
+        const actions = panel.querySelector('.kt-actions');
+        const addChildBtn = document.createElement('button');
+        addChildBtn.type = 'button';
+        addChildBtn.className = 'kt-btn';
+        addChildBtn.dataset.scope = 'category';
+        addChildBtn.dataset.action = 'insert-child';
+        addChildBtn.textContent = 'Neue Unterkategorie';
+        actions.insertBefore(addChildBtn, actions.firstChild);
+      }
+      const pkgCount = parseInt(catLi?.dataset.pkgCount || '0', 10);
+      if (pkgCount === 0) {
+        const actions = panel.querySelector('.kt-actions');
+        const addPkgBtn = document.createElement('button');
+        addPkgBtn.type = 'button';
+        addPkgBtn.className = 'kt-btn';
+        addPkgBtn.dataset.scope = 'package';
+        addPkgBtn.dataset.action = 'insert-first';
+        addPkgBtn.textContent = 'Neues Paket';
+        actions.insertBefore(addPkgBtn, actions.firstChild);
+      }
+    }
     host.appendChild(panel);
 
     // Draft: Insert-Buttons verbergen
@@ -358,6 +577,7 @@
       li.dataset.changed = item.fields?.changed  || '';
       li.dataset.childrenCount = String(item.children_count ?? 0);
       li.dataset.pkgCount      = String(item.pkg_count ?? 0);
+      updatePkgBadge(li);
 
       const hasChildren = (typeof item.children_count === 'number') ? item.children_count > 0 : false;
       if (hasChildren) {
@@ -407,8 +627,8 @@
           li.classList.remove('expanded');
           if (expandIcon) expandIcon.textContent = '▶';
           ul.querySelectorAll(`li[data-type="exercise-package"][data-parent-id="${item.pk}"]`).forEach(n => n.remove());
-          await createCategoryPanel(mergedForPanel, currentLevel + 1);
-          return;
+          if (selectedElement !== li) return; // Auswahl hat sich geändert -> nichts rendern
+            await createCategoryPanel(mergedForPanel, currentLevel + 1, { mode: 'edit' });          return;
         }
 
         li.classList.add('expanded');
@@ -433,6 +653,7 @@
                 packageLi.setAttribute('data-id', pkg.pk);
                 packageLi.setAttribute('data-type', 'exercise-package');
                 packageLi.setAttribute('data-parent-id', String(item.pk));
+                if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
 
                 const packageContainer = document.createElement('div');
                 packageContainer.style.display = "flex";
@@ -452,7 +673,7 @@
                 packageLi.appendChild(packageContainer);
 
                 packageLi.addEventListener('click', async (ev) => {
-                  discardDraftIfOther(null);
+                  discardDraftIfOther(packageLi);
                   ev.stopPropagation();
                   selectElement(packageLi, true);
                   document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
@@ -473,7 +694,10 @@
         }
 
         // Panel unten einmalig anzeigen
-        await createCategoryPanel(mergedForPanel, currentLevel + 1);
+        if (selectedElement !== li) return; // nicht mehr die aktive Kategorie
+        if (!isPackageSelected()) {
+          await createCategoryPanel(mergedForPanel, currentLevel + 1, { mode: 'edit' });
+        }
       });
 
       ul.appendChild(li);
@@ -564,6 +788,125 @@
     host.dataset.refId = refLi.getAttribute('data-id') || ''; // referenzierter Nachbar
   }
 
+  function prepareSubcategoryInsert() {
+    const host = getDetailsHost();
+
+    // Ausgangspunkt: aktuell selektierte Kategorie (oder die aus dem Host-Kontext)
+    let parentLi = selectedElement && !selectedElement.getAttribute('data-type')
+      ? selectedElement
+      : document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(host.dataset.categoryId || '')}"]`);
+
+    if (!parentLi) { alert('Keine Kategorie im Kontext.'); return; }
+
+    // Evtl. vorhandenen anderen Draft verwerfen
+    discardDraftIfOther(null);
+
+    const parentId = parentLi.getAttribute('data-id');
+    const parentLevel = parseInt(parentLi.closest('.tree-panel')?.getAttribute('data-level') || '0', 10) || 0;
+
+    // Alle Panels rechts vom Parent schließen (wir bauen das Child-Panel neu auf)
+    document.querySelectorAll('.tree-panel').forEach(p => {
+      const lvl = parseInt(p.getAttribute('data-level'), 10);
+      if (lvl > parentLevel) p.remove();
+    });
+
+    // Parent optisch expandieren + ggf. Expand-Icon nachrüsten
+    parentLi.classList.add('expanded');
+    let expandIcon = parentLi.querySelector('.expand-icon');
+    if (!expandIcon) {
+      expandIcon = document.createElement('span');
+      expandIcon.className = 'expand-icon';
+      parentLi.appendChild(expandIcon);
+    }
+    expandIcon.textContent = '▼';
+
+    // Child-Panel (level+1) bereitstellen
+    const panel = document.createElement('div');
+    panel.className = 'tree-panel';
+    panel.setAttribute('data-level', parentLevel + 1);
+
+    const ul = document.createElement('ul');
+    panel.appendChild(ul);
+
+    // Resize-Handle wie gewohnt
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'resize-handle';
+    function initResize(e) {
+      const startX = e.clientX;
+      const startWidth = panel.offsetWidth;
+      function doResize(ev) { panel.style.width = `${startWidth + ev.clientX - startX}px`; }
+      function stopResize() {
+        document.removeEventListener('mousemove', doResize);
+        document.removeEventListener('mouseup', stopResize);
+      }
+      document.addEventListener('mousemove', doResize);
+      document.addEventListener('mouseup', stopResize);
+    }
+    resizeHandle.addEventListener('mousedown', initResize);
+    panel.appendChild(resizeHandle);
+
+    // Panel einhängen (rechts vom Parent-Panel)
+    const treePanels = Array.from(document.querySelectorAll('.tree-panel'));
+    const parentPanel = parentLi.closest('.tree-panel');
+    if (parentPanel && parentPanel.nextSibling) {
+      parentPanel.parentNode.insertBefore(panel, parentPanel.nextSibling);
+    } else {
+      document.getElementById('tree-container').appendChild(panel);
+    }
+
+    // Draft-Child-Knoten erzeugen
+    const tmpId = `new-${Date.now()}`;
+    const li = document.createElement('li');
+    li.setAttribute('data-id', tmpId);
+    li.classList.add('draft');
+    li.setAttribute('data-parent-id', parentId);
+
+    // Optik
+    const container = document.createElement('div');
+    container.style.display = "flex";
+    container.style.alignItems = "center";
+    container.style.width = "100%";
+
+    const iconImg = document.createElement('img');
+    iconImg.src = "/static/images/knowledge_icon.webp";
+    iconImg.alt = "Knowledge Icon";
+    iconImg.className = "knowledge-icon";
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = "Neue Unterkategorie";
+
+    container.appendChild(iconImg);
+    container.appendChild(textSpan);
+    li.appendChild(container);
+
+    // Draft-Defaults
+    const todayISO = formatDateISO(new Date());
+    li.dataset.name = "";
+    li.dataset.created = todayISO;
+    li.dataset.changed = todayISO;
+    li.dataset.childrenCount = "0";
+    li.dataset.pkgCount = "0";
+
+    // In Child-Panel einfügen (als erstes Element)
+    ul.insertBefore(li, ul.firstChild);
+
+    // Host-Kontext für CREATE konfigurieren
+    host.dataset.mode = 'draft';
+    host.dataset.categoryId = tmpId;           // Draft-ID
+    host.dataset.parentId = String(parentId);  // WICHTIG: Parent = selektierte Kategorie
+    delete host.dataset.insertDirection;
+    delete host.dataset.refId;
+
+    // Auswahl auf Draft setzen + Editor unten öffnen
+    selectElement(li, true);
+    const itemForPanel = { pk: tmpId, fields: { text: "", created: todayISO, changed: todayISO } };
+    createCategoryPanel(itemForPanel, parentLevel + 2, { mode: 'draft' });
+
+    // Parent: childrenCount im UI erhöhen (damit Pfeil sinnvoll bleibt)
+    const count = parseInt(parentLi.dataset.childrenCount || '0', 10) || 0;
+    parentLi.dataset.childrenCount = String(count + 1);
+  }
+
   // ---- speichern: neue Kategorie ----
   // Ersetzt deine bestehende handleCategoryCreate
   async function handleCategoryCreate() {
@@ -639,6 +982,14 @@
       }
 
       const data = await res.json(); // erwartet: {id, name, created, changed, children_count, pkg_count, sort_order}
+      // Eltern-Unterkategorie finden und Badge erhöhen
+      const nodeId = host.dataset.nodeId;
+      const catLi = document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(String(nodeId))}"]`);
+      if (catLi) {
+        const cnt = (parseInt(catLi.dataset.pkgCount || '0', 10) || 0) + 1;
+        catLi.dataset.pkgCount = String(cnt);
+        updatePkgBadge(catLi, cnt);
+      }
 
       // Draft-LI finalisieren
       li.setAttribute('data-id', String(data.id));
@@ -653,6 +1004,23 @@
 
       const span = li.querySelector('span');
       if (span) span.textContent = li.dataset.name;
+
+      // ... in handleCategoryCreate() NACH dem Finalisieren von li ...
+      const parentIdAttr = host.dataset.parentId || "";
+      if (parentIdAttr) {
+        const parentLi = document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(parentIdAttr)}"]`);
+        if (parentLi) {
+          let exp = parentLi.querySelector('.expand-icon');
+          if (!exp) {
+            exp = document.createElement('span');
+            exp.className = 'expand-icon';
+            parentLi.appendChild(exp);
+          }
+          exp.textContent = '▼';
+          parentLi.classList.add('expanded');
+          // parentLi.dataset.childrenCount wird bereits im prepareSubcategoryInsert erhöht
+        }
+      }
 
       // Host-Kontext auf "edit" umstellen
       host.dataset.mode            = 'edit';
@@ -755,6 +1123,267 @@
     }
   }
 
+  function preparePackageInsert(direction /* 'before' | 'after' */) {
+    const host = getDetailsHost();
+
+    // Referenz: aktuell selektiertes Paket oder – falls keins – die Subkategorie (is-ancestor)
+    let refPkgLi = (selectedElement && selectedElement.getAttribute('data-type') === 'exercise-package')
+      ? selectedElement
+      : null;
+
+    const ancestorCatLi = document.querySelector('.tree-panel li.is-ancestor')
+                        || (selectedElement && !selectedElement.getAttribute('data-type') ? selectedElement : null);
+    const nodeId = ancestorCatLi ? ancestorCatLi.getAttribute('data-id') : null;
+
+    if (!nodeId) { alert('Keine Unterkategorie (node) im Kontext.'); return; }
+
+    // Draft-ID
+    const tmpId = `pkg-new-${Date.now()}`;
+    const li = document.createElement('li');
+    li.setAttribute('data-id', tmpId);
+    li.setAttribute('data-type', 'exercise-package');
+    li.setAttribute('data-parent-id', String(nodeId));
+    li.classList.add('draft');
+
+    // Optik & Label
+    const container = document.createElement('div');
+    container.style.display = "flex";
+    container.style.alignItems = "center";
+    container.style.width = "100%";
+
+    const iconImg = document.createElement('img');
+    iconImg.src = "/static/images/package_icon.webp";
+    iconImg.alt = "Package Icon";
+    iconImg.className = "knowledge-icon";
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = "Neues Paket";
+
+    container.appendChild(iconImg);
+    container.appendChild(textSpan);
+    li.appendChild(container);
+
+    // Created/Changed heute
+    const todayISO = formatDateISO(new Date());
+    li.dataset.name = "";
+    li.dataset.created = todayISO;
+    li.dataset.changed = todayISO;
+
+    // Einfügen: zwischen Pakete – oder falls noch keines, direkt hinter die Unterkategorie
+    const ul = ancestorCatLi ? ancestorCatLi.parentElement : null;
+
+    if (!refPkgLi) {
+      // Falls kein Paket selektiert ist, setze ref auf erstes existierendes Paket unter dieser Unterkategorie
+      refPkgLi = ul?.querySelector(`li[data-type="exercise-package"][data-parent-id="${CSS.escape(String(nodeId))}"]`) || null;
+    }
+
+    if (refPkgLi && direction === 'before') {
+      refPkgLi.parentElement.insertBefore(li, refPkgLi);
+    } else if (refPkgLi && direction === 'after') {
+      refPkgLi.parentElement.insertBefore(li, refPkgLi.nextSibling);
+    } else if (ancestorCatLi) {
+      // kein refPkgLi vorhanden (erstes Paket) -> gleich hinter der Unterkategorie einhängen
+      ancestorCatLi.parentElement.insertBefore(li, ancestorCatLi.nextSibling);
+    } else {
+      alert('Keine Position zum Einfügen gefunden.');
+      return;
+    }
+
+    // Host-Kontext für CREATE
+    host.dataset.mode = 'draft';
+    host.dataset.packageId = tmpId;
+    host.dataset.nodeId = String(nodeId);
+    host.dataset.insertDirection = direction || '';
+    host.dataset.refPkgId = refPkgLi ? (refPkgLi.getAttribute('data-id') || '') : '';
+
+    // Draft auswählen & Editor anzeigen
+    selectElement(li, true);
+    createDetailPanel({
+      id: tmpId,
+      title: "",
+      desc: "",
+      created: todayISO,
+      changed: todayISO,
+      node: { id: Number(nodeId) }
+    }, (parseInt(ancestorCatLi?.closest('.tree-panel')?.getAttribute('data-level') || '0', 10) + 2));
+    // Eltern-Kategorie als Ancestor markieren (für konsistentes Verhalten)
+    document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+    if (ancestorCatLi) ancestorCatLi.classList.add('is-ancestor');
+
+    // Button-Label auf „Neu anlegen“ ändern
+    const createBtn = host.querySelector('.kt-actions [data-scope="package"][data-action="update"]');
+    if (createBtn) createBtn.textContent = 'Neu anlegen';
+  }
+
+  async function handlePackageCreate() {
+    const host   = getDetailsHost();
+    const tempId = host.dataset.packageId; // Draft-ID
+
+    // Draft-LI finden
+    const li = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${CSS.escape(tempId)}"]`)
+          || document.querySelector(`.tree-panel li.draft[data-id="${CSS.escape(tempId)}"]`);
+    if (!li) { alert('Entwurf nicht gefunden.'); return; }
+
+    const nameEl    = host.querySelector('#pkg-name');
+    const descEl    = host.querySelector('#pkg-desc');
+    const changedEl = host.querySelector('#pkg-changed');
+
+    const title   = (nameEl?.value || '').trim();
+    if (!title) { alert('Name muss angegeben werden'); nameEl?.focus(); return; }
+
+    const created = host.dataset.packageCreated || formatDateISO(new Date());
+    const changed = (changedEl?.value || formatDateISO(new Date()));
+
+    const payload = {
+      title,
+      desc: (descEl?.value || '').trim(),
+      created,
+      changed,
+      node_id: parseInt(host.dataset.nodeId, 10) || null,
+    };
+    if (host.dataset.insertDirection && host.dataset.refPkgId) {
+      payload.direction = host.dataset.insertDirection;    // 'before' | 'after'
+      payload.ref_id    = parseInt(host.dataset.refPkgId, 10);
+    }
+
+    const res = await fetch(`${API_BASE}/package/`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken') || ''
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const msg = await res.text().catch(()=> '');
+      console.error(msg);
+      alert('Anlegen fehlgeschlagen.');
+      return;
+    }
+
+    const data = await res.json(); // ideal: { id, title, desc, created, changed, sort_order, ... }
+
+    // Eltern-Unterkategorie ermitteln
+    const subId   = li.getAttribute('data-parent-id');
+    const catLi   = subId ? document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(subId)}"]`) : null;
+    const level   = parseInt(catLi?.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+
+    // pkgCount + Badge erhöhen
+    if (catLi) {
+      const newCnt = (parseInt(catLi.dataset.pkgCount || '0', 10) || 0) + 1;
+      catLi.dataset.pkgCount = String(newCnt);
+      updatePkgBadge(catLi, newCnt);
+    }
+
+    // Draft an Ort & Stelle finalisieren (keine komplette Neurenderung!)
+    li.classList.remove('draft');
+    li.setAttribute('data-id', String(data.id));
+    if (typeof data.sort_order === 'number') li.dataset.sortOrder = String(data.sort_order);
+
+    li.dataset.name    = data.title   || title;
+    li.dataset.created = data.created || created;
+    li.dataset.changed = data.changed || changed;
+
+    // Label aktualisieren
+    const span = li.querySelector('span');
+    if (span) span.textContent = li.dataset.name;
+
+    // Paket-Klick binden (wie beim normalen Rendern)
+    bindPackageClick(li, data.id, catLi);
+
+    // Host-Kontext -> edit
+    host.dataset.mode           = 'edit';
+    host.dataset.packageId      = String(data.id);
+    host.dataset.packageName    = li.dataset.name;
+    host.dataset.packageCreated = li.dataset.created;
+    host.dataset.packageChanged = li.dataset.changed;
+    delete host.dataset.insertDirection;
+    delete host.dataset.refPkgId;
+
+    // Kontext optisch setzen & Detailpanel wie bei normalem Klick öffnen
+    document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+    if (catLi) catLi.classList.add('is-ancestor');
+
+    selectElement(li, true);
+    const details = await loadPackageDetails(data.id);
+    await createDetailPanel(details || data, level + 2);
+  }
+
+
+  async function handlePackageDelete() {
+    const host = getDetailsHost();
+    const id = parseInt(host.dataset.packageId || '', 10);
+    if (!id) { alert('Kein Paket im Kontext.'); return; }
+
+    const li = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${id}"]`);
+    if (!li) { alert('Paket nicht im Baum gefunden.'); return; }
+
+    const pkgName = host.dataset.packageName || li.dataset.name || li.querySelector('span')?.textContent || 'Paket';
+    if (!confirm(`Paket „${pkgName}“ wirklich löschen? Dies kann nicht rückgängig gemacht werden.`)) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/package/${id}/`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          [CSRF_HEADER_NAME]: getCookie('csrftoken') || ''
+        }
+      });
+      if (!res.ok && res.status !== 204) {
+        const txt = await res.text().catch(()=>'');
+        throw new Error(`Löschen fehlgeschlagen (${res.status}).\n${txt}`);
+      }
+
+      const parentId = li.getAttribute('data-parent-id');
+      const parentLi = parentId
+        ? document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(parentId)}"]`)
+        : null;
+
+      // Paket-Knoten aus dem Baum entfernen
+      li.remove();
+
+      // Detailbereich zurücksetzen
+      host.innerHTML = '';
+      host.dataset.panelOwner = '';
+      delete host.dataset.packageId;
+      delete host.dataset.packageName;
+      delete host.dataset.packageCreated;
+      delete host.dataset.packageChanged;
+
+      // Eltern-Kategorie wieder auswählen & Panel zeigen
+      if (parentLi) {
+        // Zähler in der Eltern-Kategorie dekrementieren (falls genutzt)
+        const cnt = Math.max(0, (parseInt(parentLi.dataset.pkgCount || '0', 10) || 0) - 1);
+        parentLi.dataset.pkgCount = String(cnt);
+        updatePkgBadge(parentLi, cnt);
+
+        const parentLevel = parseInt(parentLi.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+        selectElement(parentLi, true);
+
+        const merged = {
+          pk: parentLi.getAttribute('data-id'),
+          fields: {
+            text:    parentLi.dataset.name    || parentLi.querySelector('span')?.textContent || '',
+            created: parentLi.dataset.created || '',
+            changed: parentLi.dataset.changed || ''
+          }
+        };
+        await createCategoryPanel(merged, parentLevel + 1, { mode: 'edit', force: true });
+      } else {
+        removeDetailPanel();
+        // optional: selectedElement = null;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Löschen fehlgeschlagen. Details in der Konsole.');
+    }
+  }
+
+
   // ---- speichern: bestehende Kategorie ----
   async function handleCategoryUpdate() {
     const host = getDetailsHost();
@@ -840,6 +1469,158 @@
     }
   }
 
+  async function handlePackageUpdate() {
+    const host = getDetailsHost();
+    const id = parseInt(host.dataset.packageId || '', 10);
+    if (!id) { alert('Kein Paket im Kontext.'); return; }
+
+    const nameEl    = host.querySelector('#pkg-name');
+    const changedEl = host.querySelector('#pkg-changed');
+    const descEl    = host.querySelector('#pkg-desc');
+
+    const newTitle   = (nameEl?.value || '').trim();
+    const newChanged = (changedEl?.value || '').trim();
+    const newDesc    = (descEl?.value || '').trim();
+
+    if (!newTitle) {
+      alert('Name muss angegeben werden');
+      nameEl?.focus();
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/package/${id}/`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken') || ''
+        },
+        body: JSON.stringify({
+          title: newTitle,
+          desc: newDesc,
+          changed: newChanged || undefined
+        })
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(()=> '');
+        throw new Error(`Update fehlgeschlagen (${res.status}).\n${txt}`);
+      }
+      const data = await res.json();
+      const changedEl = host.querySelector('#pkg-changed');
+      if (changedEl && (data.changed || newChanged)) {
+        changedEl.value = data.changed ? formatDateISO(data.changed) : newChanged;
+      }
+      // 1) Label im Baum aktualisieren
+      const li = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${id}"]`);
+      if (li) {
+        li.dataset.name = data.title || newTitle;
+        const span = li.querySelector('span');
+        if (span) span.textContent = li.dataset.name;
+      }
+
+      // 2) Panel-Daten aktualisieren
+      host.dataset.packageName    = data.title   || newTitle;
+      host.dataset.packageChanged = data.changed || newChanged;
+
+      if (changedEl && (data.changed || newChanged)) {
+        changedEl.value = data.changed ? formatDateISO(data.changed) : newChanged;
+      }
+      // Name/Desc sind schon gesetzt (Inputs)
+
+      console.log('Paket gespeichert:', data);
+    } catch (err) {
+      console.error(err);
+      alert('Speichern fehlgeschlagen. Details in der Konsole.');
+    }
+  }
+
+  function discardDraftPackage() {
+    const host = getDetailsHost();
+
+    // Draft-Paket finden (präferiert via Host-ID, sonst generisch)
+    const draftId = host.dataset.mode === 'draft' ? host.dataset.packageId : null;
+    const sel = draftId
+      ? `.tree-panel li.draft[data-type="exercise-package"][data-id="${CSS.escape(draftId)}"]`
+      : `.tree-panel li.draft[data-type="exercise-package"]`;
+    const draftLi = document.querySelector(sel);
+    if (!draftLi) return;
+
+    const parentId = draftLi.getAttribute('data-parent-id') || '';
+    // Draft entfernen
+    draftLi.remove();
+
+    // Detailbereich & Host-Kontext bereinigen
+    host.innerHTML = '';
+    host.dataset.mode = 'edit';
+    host.dataset.panelOwner = '';
+    delete host.dataset.packageId;
+    delete host.dataset.packageName;
+    delete host.dataset.packageCreated;
+    delete host.dataset.packageChanged;
+    delete host.dataset.nodeId;
+    delete host.dataset.insertDirection;
+    delete host.dataset.refPkgId;
+
+    if (selectedElement === draftLi) selectedElement = null;
+
+    // Zur Eltern-Kategorie zurückspringen und Panel zeigen
+    if (parentId) {
+      const catLi = document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(parentId)}"]`);
+      if (catLi) {
+        const level = parseInt(catLi.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+        selectElement(catLi, true);
+        catLi.classList.add('is-ancestor');
+
+        const merged = {
+          pk: catLi.getAttribute('data-id'),
+          fields: {
+            text:    catLi.dataset.name    || catLi.querySelector('span')?.textContent || '',
+            created: catLi.dataset.created || '',
+            changed: catLi.dataset.changed || ''
+          }
+        };
+        createCategoryPanel(merged, level + 1, { mode: 'edit', force: true });
+      } else {
+        removeDetailPanel();
+      }
+    } else {
+      removeDetailPanel();
+    }
+  }
+
+  function updatePkgBadge(catLi, explicitCount) {
+    if (!catLi) return;
+    const container = catLi.firstElementChild; // dein <div> mit Icon + Text
+    if (!container) return;
+
+    // Count bestimmen
+    const count = (typeof explicitCount === 'number')
+      ? explicitCount
+      : (parseInt(catLi.dataset.pkgCount || '0', 10) || 0);
+
+    let badge = container.querySelector('.pkg-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'pkg-badge';
+        // dezentes Inline-Styling; gern in CSS auslagern
+        badge.style.marginLeft = 'auto';
+        badge.style.fontSize = '12px';
+        badge.style.padding = '2px 6px';
+        badge.style.borderRadius = '10px';
+        badge.style.background = 'var(--kt-badge-bg, #eef)';
+        badge.style.color = 'var(--kt-badge-fg, #333)';
+        container.appendChild(badge);
+      }
+      badge.textContent = `📦 ${count}`;
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.kt-btn[data-action]');
     if (!btn) return;
@@ -847,9 +1628,34 @@
     e.stopPropagation(); // kleine Extra-Sicherheit
 
     const { scope, action } = btn.dataset;
+
+    if (scope === 'package') {
+      if (action === 'insert-before') { preparePackageInsert('before'); return; }
+      if (action === 'insert-after')  { preparePackageInsert('after');  return; }
+      if (action === 'insert-first') {
+        // erstes Paket – nutzt dieselbe Insert-Logik, refPkg ist automatisch leer
+        preparePackageInsert('after');
+        return;
+      }
+      if (action === 'update') {
+        const host = getDetailsHost();
+        if (host?.dataset.mode === 'draft') { handlePackageCreate(); }
+        else { handlePackageUpdate(); }
+        return;
+      }
+      if (action === 'discard') {
+        discardDraftPackage();          // <— NEU: gezielt Paket-Draft verwerfen
+        return;
+      }
+      if (action === 'delete') {
+        handlePackageDelete();
+        return;
+      }
+    }
     if (scope === 'category') {
       if (action === 'insert-before') { prepareCategoryInsert('before'); return; }
       if (action === 'insert-after')  { prepareCategoryInsert('after');  return; }
+      if (action === 'insert-child') { prepareSubcategoryInsert(); return; }
       if (action === 'update') {
         const host = getDetailsHost();
         if (host?.dataset.mode === 'draft') { handleCategoryCreate(); }
