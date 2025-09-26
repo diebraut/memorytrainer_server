@@ -6,7 +6,9 @@ from datetime import date
 
 from django.db import models
 from django.db.models import Count, F, Max, Q
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.dateparse import parse_date
@@ -116,23 +118,24 @@ def get_subcategories(request, category_id: int):
 
 
 # packages/views.py
-def get_details(request, category_id: int, subcategory_id: int):
-    pkgs = (
-        ExercisePackage.objects
-        .filter(treeNode_id=subcategory_id)
-        .order_by('sort_order', 'id')  # statt packageName
-        .values('id', 'packageName', 'packageDescription', 'createDate', 'changeDate', 'sort_order')
-    )
+# packages/views.py
+from django.views.decorators.http import require_GET
 
+@require_GET
+def get_details(request, category_id, subcategory_id):
+    node = get_object_or_404(TreeNode, pk=subcategory_id)
+    qs = (ExercisePackage.objects
+          .filter(treeNode=node)
+          .order_by('sort_order', 'id')
+          .values('id','packageName','packageDescription','createDate','changeDate','sort_order'))
     items = [{
-        "id": p["id"],
-        "title": p["packageName"],
-        "desc": p["packageDescription"],
-        "created": p["createDate"].isoformat() if p["createDate"] else None,
-        "changed": p["changeDate"].isoformat() if p["changeDate"] else None,
-        "sort_order": p["sort_order"],
-    } for p in pkgs]
-
+        "id": r["id"],
+        "title": r["packageName"],
+        "desc": r["packageDescription"],
+        "created": r["createDate"],
+        "changed": r["changeDate"],
+        "sort_order": r["sort_order"],
+    } for r in qs]
     return JsonResponse({"items": items})
 
 
@@ -323,69 +326,57 @@ from django.db import transaction
 from datetime import date
 
 
-@csrf_exempt
 @require_http_methods(["POST"])
+@transaction.atomic
 def create_package(request):
     try:
-        payload = json.loads(request.body.decode('utf-8') or '{}')
-    except Exception:
-        payload = {}
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return HttpResponseBadRequest("invalid json")
 
-    node_id = payload.get('node_id')
-    title = (payload.get('title') or '').strip()
-    desc = payload.get('desc') or ''
-    ref_id = payload.get('ref_pkg_id')  # optional: Referenzpaket
-    direction = payload.get('direction')  # 'before' | 'after' | None
+    title     = (payload.get("title") or "").strip()
+    desc      = payload.get("desc") or ""
+    created   = payload.get("created") or timezone.now().date()
+    changed   = payload.get("changed") or timezone.now().date()
+    node_id   = payload.get("node_id")
+    direction = (payload.get("direction") or "").lower()
+    ref_id    = payload.get("ref_id")
 
-    if not node_id:
-        return JsonResponse({"error": "node_id required"}, status=400)
-    if not title:
-        return JsonResponse({"error": "title required"}, status=400)
+    if not title or not node_id:
+        return HttpResponseBadRequest("title and node_id required")
 
-    created = _date_from_payload(payload.get("created"), fallback=date.today())
-    changed = _date_from_payload(payload.get("changed"), fallback=date.today())
+    node = get_object_or_404(TreeNode, pk=node_id)
 
-    with transaction.atomic():
-        siblings = list(
-            ExercisePackage.objects
-            .filter(treeNode_id=node_id)
-            .order_by('sort_order', 'id')
-        )
+    # Ziel-Sortierindex bestimmen
+    if direction in ("before", "after") and ref_id:
+        ref = get_object_or_404(ExercisePackage, pk=ref_id, treeNode=node)
+        target = ref.sort_order if direction == "before" else ref.sort_order + 1
+        # Platz schaffen
+        ExercisePackage.objects.filter(treeNode=node, sort_order__gte=target)\
+            .update(sort_order=F('sort_order') + 1)
+        sort_order = target
+    else:
+        # ans Ende
+        max_so = ExercisePackage.objects.filter(treeNode=node).aggregate(m=Max("sort_order"))["m"]
+        sort_order = 0 if max_so is None else max_so + 1
 
-        insert_at = len(siblings)  # default: ans Ende
-        if ref_id and direction in ('before', 'after'):
-            for idx, p in enumerate(siblings):
-                if p.id == ref_id:
-                    insert_at = idx + (1 if direction == 'after' else 0)
-                    break
-
-        # Platz schaffen (alle >= insert_at um +1 schieben)
-        for idx, p in enumerate(siblings):
-            new_order = idx if idx < insert_at else idx + 1
-            if p.sort_order != new_order:
-                p.sort_order = new_order
-        if siblings:
-            ExercisePackage.objects.bulk_update(siblings, ['sort_order'])
-
-        pkg = ExercisePackage.objects.create(
-            packageName=title,
-            packageDescription=desc,
-            createDate=created,
-            changeDate=changed,
-            treeNode_id=node_id,
-            sort_order=insert_at,
-        )
+    pkg = ExercisePackage.objects.create(
+        packageName=title,
+        packageDescription=desc,
+        createDate=created,
+        changeDate=changed,
+        sort_order=sort_order,
+        treeNode=node,
+    )
 
     return JsonResponse({
         "id": pkg.id,
         "title": pkg.packageName,
         "desc": pkg.packageDescription,
-        "created": pkg.createDate.isoformat() if pkg.createDate else None,
-        "changed": pkg.changeDate.isoformat() if pkg.changeDate else None,
+        "created": pkg.createDate,
+        "changed": pkg.changeDate,
         "sort_order": pkg.sort_order,
-        "node": {"id": node_id},
     }, status=201)
-
 
 @csrf_exempt
 @require_http_methods(["POST"])

@@ -267,9 +267,11 @@
     );
 
     // Einfüge-Metadaten zurücksetzen (werden bei Insert neu gesetzt)
-    delete host.dataset.insertDirection;
-    delete host.dataset.refPkgId;
-
+    // WICHTIG: Im Draft NICHT löschen – wir brauchen die Einfüge-Metadaten fürs Anlegen
+    if (!isDraft) {
+      delete host.dataset.insertDirection;
+      delete host.dataset.refPkgId;
+    }
     const createdPretty = packageData.created ? formatDate(packageData.created) : '';
     const changedISO    = packageData.changed ? formatDateISO(packageData.changed)
                                               : formatDateISO(new Date());
@@ -1217,12 +1219,10 @@
 
   async function handlePackageCreate() {
     const host   = getDetailsHost();
-    const tempId = host.dataset.packageId; // Draft-ID
-
-    // Draft-LI finden
-    const li = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${CSS.escape(tempId)}"]`)
-          || document.querySelector(`.tree-panel li.draft[data-id="${CSS.escape(tempId)}"]`);
-    if (!li) { alert('Entwurf nicht gefunden.'); return; }
+    const tempId = host.dataset.packageId;
+    const liDraft = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${CSS.escape(tempId)}"]`)
+                 || document.querySelector(`.tree-panel li.draft[data-id="${CSS.escape(tempId)}"]`);
+    if (!liDraft) { alert('Entwurf nicht gefunden.'); return; }
 
     const nameEl    = host.querySelector('#pkg-name');
     const descEl    = host.querySelector('#pkg-desc');
@@ -1242,7 +1242,7 @@
       node_id: parseInt(host.dataset.nodeId, 10) || null,
     };
     if (host.dataset.insertDirection && host.dataset.refPkgId) {
-      payload.direction = host.dataset.insertDirection;    // 'before' | 'after'
+      payload.direction = host.dataset.insertDirection;
       payload.ref_id    = parseInt(host.dataset.refPkgId, 10);
     }
 
@@ -1264,52 +1264,34 @@
       return;
     }
 
-    const data = await res.json(); // ideal: { id, title, desc, created, changed, sort_order, ... }
+    const data = await res.json();
+    const newId = data.id;
 
-    // Eltern-Unterkategorie ermitteln
-    const subId   = li.getAttribute('data-parent-id');
-    const catLi   = subId ? document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(subId)}"]`) : null;
-    const level   = parseInt(catLi?.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
-
-    // pkgCount + Badge erhöhen
-    if (catLi) {
-      const newCnt = (parseInt(catLi.dataset.pkgCount || '0', 10) || 0) + 1;
-      catLi.dataset.pkgCount = String(newCnt);
-      updatePkgBadge(catLi, newCnt);
-    }
-
-    // Draft an Ort & Stelle finalisieren (keine komplette Neurenderung!)
-    li.classList.remove('draft');
-    li.setAttribute('data-id', String(data.id));
-    if (typeof data.sort_order === 'number') li.dataset.sortOrder = String(data.sort_order);
-
-    li.dataset.name    = data.title   || title;
-    li.dataset.created = data.created || created;
-    li.dataset.changed = data.changed || changed;
-
-    // Label aktualisieren
-    const span = li.querySelector('span');
-    if (span) span.textContent = li.dataset.name;
-
-    // Paket-Klick binden (wie beim normalen Rendern)
-    bindPackageClick(li, data.id, catLi);
-
-    // Host-Kontext -> edit
+    // Host in "edit" umstellen
     host.dataset.mode           = 'edit';
-    host.dataset.packageId      = String(data.id);
-    host.dataset.packageName    = li.dataset.name;
-    host.dataset.packageCreated = li.dataset.created;
-    host.dataset.packageChanged = li.dataset.changed;
-    delete host.dataset.insertDirection;
-    delete host.dataset.refPkgId;
+    host.dataset.packageId      = String(newId);
+    host.dataset.packageName    = data.title || title;
+    host.dataset.packageChanged = data.changed || changed;
 
-    // Kontext optisch setzen & Detailpanel wie bei normalem Klick öffnen
-    document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
-    if (catLi) catLi.classList.add('is-ancestor');
+    // Eltern-Unterkategorie (als <li>) ermitteln
+    const parentNodeId = liDraft.getAttribute('data-parent-id');
+    const catLi = parentNodeId
+        ? document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(parentNodeId)}"]`)
+        : null;
 
-    selectElement(li, true);
-    const details = await loadPackageDetails(data.id);
-    await createDetailPanel(details || data, level + 2);
+    // Komplett neu rendern — sortiert nach serverseitigem sort_order
+    // (entfernt automatisch den Draft-Knoten, weil alle Paket-LIs für diese Unterkategorie neu aufgebaut werden)
+    if (catLi) {
+      const cnt = (parseInt(catLi.dataset.pkgCount || '0', 10) || 0) + 1;
+      updatePkgBadge(catLi, cnt);
+      await rerenderPackagesForCategory(catLi, newId); // wählt newId direkt aus & zeigt Panel
+    } else {
+      // Fallback: Draft entfernen und nur Detailpanel anzeigen
+      liDraft.remove();
+      const full = await loadPackageDetails(newId);
+      const parentLevel =  parseInt(document.querySelector('.tree-panel [data-id="'+parentNodeId+'"]')?.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
+      if (full) await createDetailPanel(full, parentLevel + 2);
+    }
   }
 
 
