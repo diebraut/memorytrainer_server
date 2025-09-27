@@ -440,3 +440,43 @@ h1 {
 
   /* Editierbare Inputs bleiben hell, wie oben erzwungen */
 }
+/* ---- Pfad-Markierung im Baum ---- */
+.tree-panel li.is-ancestor > div {
+  background: rgba(0, 123, 255, 0.12);
+  border-radius: 4px;
+  box-shadow: inset 3px 0 0 #0b57d0;
+}
+
+/* Noch deutlicheres „Band“ für alle Vorfahren des aktuell selektierten Knotens */
+.tree-panel li.path-ancestor > div {
+  background: rgba(0, 123, 255, 0.18);
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+
+/* ---- Breadcrumb oben unter der Überschrift ---- */
+#kt-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin: 4px 0 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 14px;
+}
+
+.kt-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  color: #111;
+}
+
+.kt-crumb-sep { opacity: .6; }
+.kt-crumb--leaf { background: #0b57d0; color: #fff; border-color: #0b57d0; }

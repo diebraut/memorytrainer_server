@@ -13,14 +13,116 @@
   if (!treeContainer) return;
 
   // ---- utils ----
+  function clearPathMarks() {
+    document.querySelectorAll('.tree-panel li.path-ancestor, .tree-panel li.is-ancestor')
+      .forEach(n => n.classList.remove('path-ancestor', 'is-ancestor'));
+  }
 
+  function findLiById(id) {
+    return document.querySelector(`.tree-panel li[data-id="${CSS.escape(String(id))}"]`);
+  }
+
+  /**
+   * Ermittelt den Pfad (Array von <li>) von der Root bis zu li.
+   * Nutzt data-parent-id (liegt bei Unterebenen bereits vor).
+   */
+  function getPathForLi(li) {
+    if (!li) return [];
+    const path = [li];
+    // Steige über data-parent-id nach links durch die Panels
+    let current = li;
+    while (current && current.hasAttribute('data-parent-id')) {
+      const parentId = current.getAttribute('data-parent-id');
+      if (!parentId) break;
+      const parentLi = findLiById(parentId);
+      if (!parentLi) break;
+      path.unshift(parentLi); // nach vorne (Root…->…li)
+      current = parentLi;
+    }
+    return path;
+  }
+
+  /** Markiert den gesamten Pfad (alle Vorfahren) */
+  function markActivePath(targetLi) {
+    clearPathMarks();
+    const path = getPathForLi(targetLi);
+    path.forEach((n, idx) => {
+      // sanfte Markierung aller Vorfahren + direkte Parent-Markierung
+      if (idx < path.length - 1) n.classList.add('path-ancestor');
+    });
+    // Kompatibilität zu bestehender Logik (wird z. T. schon benutzt)
+    const parentOfLeaf = path.length > 1 ? path[path.length - 2] : null;
+    if (parentOfLeaf) parentOfLeaf.classList.add('is-ancestor');
+    return path;
+  }
+
+  /** Breadcrumb oben rendern */
+  function renderBreadcrumbFromPath(path, leafText = null) {
+    const host = document.getElementById('kt-breadcrumb');
+    if (!host) return;
+
+    // leeren
+    host.innerHTML = '';
+
+    if (!Array.isArray(path) || path.length === 0) return;
+
+    // Kategorienpfad rendern
+    path.forEach((li, idx) => {
+      const name =
+        (li?.dataset?.name || li?.querySelector('span')?.textContent || '').trim();
+
+      const crumb = document.createElement('span');
+      // Wenn KEIN leafText übergeben wurde (Kategorie selektiert),
+      // ist die letzte Kategorie der "leaf"
+      crumb.className =
+        'kt-crumb' + (idx === path.length - 1 && !leafText ? ' kt-crumb--leaf' : '');
+      crumb.textContent = name || '—';
+      host.appendChild(crumb);
+
+      if (idx < path.length - 1) {
+        const sep = document.createElement('span');
+        sep.className = 'kt-crumb-sep';
+        sep.textContent = '›';
+        host.appendChild(sep);
+      }
+    });
+
+    // Paketname nur anhängen, wenn wirklich selektiert (leafText gesetzt)
+    if (leafText && leafText.trim()) {
+      const sep = document.createElement('span');
+      sep.className = 'kt-crumb-sep';
+      sep.textContent = '›';
+      host.appendChild(sep);
+
+      const leaf = document.createElement('span');
+      leaf.className = 'kt-crumb kt-crumb--leaf';
+      leaf.textContent = leafText.trim();
+      host.appendChild(leaf);
+    }
+  }
+  /** Convenience: Pfad markieren + Breadcrumb setzen */
+  /** Pfad markieren + Breadcrumb setzen (optional mit Paket-Leaf) */
+  function activatePathFor(li, leafTextOpt) {
+    const path = markActivePath(li);
+
+    // Wenn explizit ein Paketname übergeben wurde, den verwenden.
+    // Sonst: falls li selbst ein Paket ist, dessen Label nehmen.
+    let leafText = null;
+    if (typeof leafTextOpt === 'string' && leafTextOpt.trim()) {
+      leafText = leafTextOpt.trim();
+    } else if (li?.getAttribute('data-type') === 'exercise-package') {
+      leafText = (li.dataset.name || li.querySelector('span')?.textContent || '').trim();
+    }
+    renderBreadcrumbFromPath(path, leafText);
+  }
   // Paket-Klick binden (wie im createPanel)
   function bindPackageClick(li, pkgId, categoryLi) {
     li.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       discardDraftIfOther(li);
       selectElement(li, true);
-
+      const leafName = (li.dataset.name || li.querySelector('span')?.textContent || '').trim();
+      activatePathFor(categoryLi || li, leafName);
       // Eltern-Unterkategorie als Ancestor markieren
       document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
       if (categoryLi) categoryLi.classList.add('is-ancestor');
@@ -57,6 +159,7 @@
       packageLi.setAttribute('data-type', 'exercise-package');
       packageLi.setAttribute('data-parent-id', String(subId));
       if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
+      packageLi.dataset.name = pkg.fields.packageName || '';
 
       const packageContainer = document.createElement('div');
       packageContainer.style.display   = "flex";
@@ -94,7 +197,8 @@
       categoryLi.classList.add('is-ancestor');
 
       selectElement(liToSelect, true);
-      const data = await loadPackageDetails(selectPkgId);
+      const leafName = liToSelect.dataset.name || liToSelect.querySelector('span')?.textContent || '';
+      activatePathFor(categoryLi, leafName); // Paket ist selektiert → mit Leaf      const data = await loadPackageDetails(selectPkgId);
       if (data) await createDetailPanel(data, levelBase + 2);
     }
   }
@@ -132,10 +236,14 @@
 
     const level = parseInt(li.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
     selectElement(li, level > 0);
-
+    activatePathFor(li);
     // Paket ausgewählt? -> Paket-Detail unten anzeigen
     if (li.getAttribute('data-type') === 'exercise-package') {
       const pkgId = li.getAttribute('data-id');
+      const pkgName = li.dataset.name || li.querySelector('span')?.textContent || '';
+      const parentId = li.getAttribute('data-parent-id');
+      const catLi = parentId ? findLiById(parentId) : null;
+      activatePathFor(catLi || li, pkgName); // zeigt Paketname nur bei Paket-Auswahl
       loadPackageDetails(pkgId)
         .then(data => { if (data) createDetailPanel(data, level + 2); })
         .catch(console.error);
@@ -151,6 +259,7 @@
         changed: li.dataset.changed || '',
       }
     };
+    activatePathFor(li); // nur Kategorienpfad ohne Paketname
     createCategoryPanel(mergedForPanel, level + 1, { mode: 'edit'});
   }
 
@@ -602,6 +711,7 @@
 
         const currentLevel = parseInt(li.closest('.tree-panel').getAttribute('data-level'), 10);
         selectElement(li, currentLevel > 0);
+        activatePathFor(li); // nur Kategorienpfad
 
         // Siblings reset
         document.querySelectorAll(`.tree-panel[data-level="${currentLevel}"] li`).forEach(otherLi => {
@@ -662,6 +772,7 @@
               packageLi.setAttribute('data-type', 'exercise-package');
               packageLi.setAttribute('data-parent-id', String(item.pk));
               if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
+              packageLi.dataset.name = pkg.fields.packageName || '';
 
               const packageContainer = document.createElement('div');
               packageContainer.style.display = "flex";
@@ -689,7 +800,8 @@
                 discardDraftIfOther(packageLi);
                 ev.stopPropagation();
                 selectElement(packageLi, true);
-                document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+                const leafName = (packageLi.dataset.name || packageLi.querySelector('span')?.textContent || '').trim();
+                activatePathFor(li, leafName); // li = zugehörige Kategorie                document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
                 li.classList.add('is-ancestor');
                 const data = await loadPackageDetails(pkg.pk);
                 if (data) await createDetailPanel(data, level + 2);
@@ -1354,6 +1466,7 @@
 
         const parentLevel = parseInt(parentLi.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
         selectElement(parentLi, true);
+        activatePathFor(parentLi);
 
         const merged = {
           pk: parentLi.getAttribute('data-id'),
@@ -1366,8 +1479,8 @@
         await createCategoryPanel(merged, parentLevel + 1, { mode: 'edit', force: true });
       } else {
         removeDetailPanel();
-        // optional: selectedElement = null;
-      }
+        const bc = document.getElementById('kt-breadcrumb');
+        if (bc) bc.innerHTML = '';      }
     } catch (err) {
       console.error(err);
       alert('Löschen fehlgeschlagen. Details in der Konsole.');
@@ -1562,6 +1675,7 @@
       if (catLi) {
         const level = parseInt(catLi.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
         selectElement(catLi, true);
+        activatePathFor(catLi);
         catLi.classList.add('is-ancestor');
 
         const merged = {
