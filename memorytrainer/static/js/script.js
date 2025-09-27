@@ -569,8 +569,14 @@
       const textSpan = document.createElement('span');
       textSpan.textContent = item.fields.text;
 
+      // Rechtsseitiger Meta-Bereich: zuerst Badge, dann Pfeil
+      const meta = document.createElement('div');
+      meta.className = 'row-meta'; // <-- wird in CSS gestylt
+      // (Badge wird später via updatePkgBadge() hier eingefügt)
+
       container.appendChild(iconImg);
       container.appendChild(textSpan);
+      container.appendChild(meta);
       li.appendChild(container);
 
       // dataset → immer aktuelle Werte
@@ -586,7 +592,7 @@
         const expandIcon = document.createElement('span');
         expandIcon.textContent = '▶';
         expandIcon.className = 'expand-icon';
-        li.appendChild(expandIcon);
+        meta.appendChild(expandIcon);
       }
 
       // --- click handler (bereinigt) ---
@@ -642,59 +648,62 @@
           await createPanel(nextItems, level + 1, false, item.pk, null);
         }
 
-        // Pakete (nur in Unterebenen)
-        if (parentId != null && level >= 1) {
-          try {
-            const pkgs = await fetchPackages(parentId, item.pk);
-            ul.querySelectorAll(`li[data-type="exercise-package"][data-parent-id="${item.pk}"]`).forEach(n => n.remove());
+        // Pakete (für jeden Knoten, inkl. Root)
+        try {
+          const pkgs = await fetchPackages(parentId ?? 0, item.pk); // category_id egal → 0 passt
+          // alte Paket-Zeilen dieses Knotens entfernen
+          ul.querySelectorAll(`li[data-type="exercise-package"][data-parent-id="${item.pk}"]`).forEach(n => n.remove());
 
-            if (pkgs.length > 0) {
-              const frag = document.createDocumentFragment();
-              pkgs.forEach(pkg => {
-                const packageLi = document.createElement('li');
-                packageLi.setAttribute('data-id', pkg.pk);
-                packageLi.setAttribute('data-type', 'exercise-package');
-                packageLi.setAttribute('data-parent-id', String(item.pk));
-                if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
+          if (pkgs.length > 0) {
+            const frag = document.createDocumentFragment();
+            pkgs.forEach(pkg => {
+              const packageLi = document.createElement('li');
+              packageLi.setAttribute('data-id', pkg.pk);
+              packageLi.setAttribute('data-type', 'exercise-package');
+              packageLi.setAttribute('data-parent-id', String(item.pk));
+              if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
 
-                const packageContainer = document.createElement('div');
-                packageContainer.style.display = "flex";
-                packageContainer.style.alignItems = "center";
-                packageContainer.style.width = "100%";
+              const packageContainer = document.createElement('div');
+              packageContainer.style.display = "flex";
+              packageContainer.style.alignItems = "center";
+              packageContainer.style.width = "100%";
 
-                const packageIconImg = document.createElement('img');
-                packageIconImg.src = "/static/images/package_icon.webp";
-                packageIconImg.alt = "Package Icon";
-                packageIconImg.className = "knowledge-icon";
+              const packageIconImg = document.createElement('img');
+              packageIconImg.src = "/static/images/package_icon.webp";
+              packageIconImg.alt = "Package Icon";
+              packageIconImg.className = "knowledge-icon";
 
-                const packageTextSpan = document.createElement('span');
-                packageTextSpan.textContent = pkg.fields.packageName;
+              const packageTextSpan = document.createElement('span');
+              packageTextSpan.textContent = pkg.fields.packageName;
 
-                packageContainer.appendChild(packageIconImg);
-                packageContainer.appendChild(packageTextSpan);
-                packageLi.appendChild(packageContainer);
+              const meta = document.createElement('div');
+              meta.className = 'row-meta';
 
-                packageLi.addEventListener('click', async (ev) => {
-                  discardDraftIfOther(packageLi);
-                  ev.stopPropagation();
-                  selectElement(packageLi, true);
-                  document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
-                  li.classList.add('is-ancestor');
-                  const data = await loadPackageDetails(pkg.pk);
-                  if (data) await createDetailPanel(data, level + 2);
-                });
+              packageContainer.appendChild(packageIconImg);
+              packageContainer.appendChild(packageTextSpan);
+              packageContainer.appendChild(meta);
+              packageLi.appendChild(packageContainer);
 
-                frag.appendChild(packageLi);
+              // Klick auf Paket
+              packageLi.addEventListener('click', async (ev) => {
+                discardDraftIfOther(packageLi);
+                ev.stopPropagation();
+                selectElement(packageLi, true);
+                document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+                li.classList.add('is-ancestor');
+                const data = await loadPackageDetails(pkg.pk);
+                if (data) await createDetailPanel(data, level + 2);
               });
-              li.parentNode.insertBefore(frag, li.nextSibling);
-            } else {
-              removeDetailPanel();
-            }
-          } catch (e) {
-            console.error(e);
-          }
-        }
 
+              frag.appendChild(packageLi);
+            });
+            li.parentNode.insertBefore(frag, li.nextSibling);
+          } else {
+            removeDetailPanel();
+          }
+        } catch (e) {
+          console.error(e);
+        }
         // Panel unten einmalig anzeigen
         if (selectedElement !== li) return; // nicht mehr die aktive Kategorie
         if (!isPackageSelected()) {
@@ -1574,7 +1583,7 @@
 
   function updatePkgBadge(catLi, explicitCount) {
     if (!catLi) return;
-    const container = catLi.firstElementChild; // dein <div> mit Icon + Text
+    const container = catLi.firstElementChild; // dein <div> mit Icon + Text (+ meta)
     if (!container) return;
 
     // Count bestimmen
@@ -1582,19 +1591,20 @@
       ? explicitCount
       : (parseInt(catLi.dataset.pkgCount || '0', 10) || 0);
 
-    let badge = container.querySelector('.pkg-badge');
+    // NEU: Meta-Container finden/erzeugen
+    let meta = container.querySelector('.row-meta');
+    if (!meta) {
+      meta = document.createElement('div');
+      meta.className = 'row-meta';
+      container.appendChild(meta);
+    }
+
+    let badge = meta.querySelector('.pkg-badge');
     if (count > 0) {
       if (!badge) {
         badge = document.createElement('span');
         badge.className = 'pkg-badge';
-        // dezentes Inline-Styling; gern in CSS auslagern
-        badge.style.marginLeft = 'auto';
-        badge.style.fontSize = '12px';
-        badge.style.padding = '2px 6px';
-        badge.style.borderRadius = '10px';
-        badge.style.background = 'var(--kt-badge-bg, #eef)';
-        badge.style.color = 'var(--kt-badge-fg, #333)';
-        container.appendChild(badge);
+        meta.insertBefore(badge, meta.querySelector('.expand-icon') || null); // Badge links, Pfeil rechts
       }
       badge.textContent = `📦 ${count}`;
     } else if (badge) {

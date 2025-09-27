@@ -1,251 +1,189 @@
-/* Allgemeine Stile für die gesamte Seite */
+/* ========== Global ========== */
 body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    //background-color: #f4f4f4;
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
 }
 
-/* Überschrift */
 h1 {
-    text-align: center;
-    color: #333;
-    padding: 20px;
+  text-align: center;
+  color: #333;
+  padding: 20px;
 }
 
-/* Container für den Tree-View */
+/* ========== Tree Container & Panels ========== */
 .tree-container {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
-    height: 100%;
-    overflow-x: auto;
-    padding: 10px 0;
-    //background-color: #2b2f36;
-    border: 1px solid #1f2937;
-    border-radius: 12px;
-    box-sizing: border-box; /* damit Border/Radius sauber mitgerechnet werden */
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  height: 100%;
+  overflow-x: auto;
+  padding: 10px 0;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  box-sizing: border-box;
 }
 
-/* Stile für jedes Panel */
 .tree-panel {
-    border-left: 1px solid #ccc;
-    border-right: 1px solid #ccc;
-    border-top: 2px solid #ccc;
-    border-bottom: 2px solid #ccc;
-    padding: 10px;
-    position: relative;
-    background :#cbd5e1;
-    box-sizing: border-box;
-    min-width: 250px;
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
+  border: 2px solid #ccc;
+  padding: 10px;
+  position: relative;
+  background: #cbd5e1;
+  box-sizing: border-box;
+  min-width: 250px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Liste in jedem Panel */
 .tree-panel ul {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-    flex-grow: 1;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1;
 }
 
-/* Einzelne Listenelemente */
+/* ========== Tree Rows ========== */
 .tree-panel li {
-    display: flex;
-    align-items: center;
-    padding: 5px 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    border-bottom: 1px solid #ddd;
-    position: relative; /* Damit die Pfeile am rechten Rand fixiert werden können */
+  display: flex;
+  align-items: center;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid #ddd;
+  box-sizing: border-box;
+  transition: padding-left 120ms ease, background-color 120ms ease;
 }
+.tree-panel li:last-child { border-bottom: none; }
 
-/* Sicherstellen, dass der Text immer linksbündig bleibt */
+/* Text in Zeile */
 .tree-panel li span {
-    text-align: left;
-    flex-grow: 1;
-    color: black;
+  text-align: left;
+  flex-grow: 1;
+  color: black;
 }
 
-/* Hover-Effekt für Listenelemente */
-.tree-panel li:hover {
-    background-color: #f0f0f0;
-}
+/* Hover */
+.tree-panel li:hover { background-color: #f0f0f0; }
 
-/* Markiertes Element */
-.tree-panel li.selected {
-    background-color: #007BFF;
-    color: white;
-    font-weight: bold;
-    padding: 5px 8px;
-    border-radius: 4px;
-    margin-left: 8px; /* Gleicher Abstand wie rechts */
-    margin-right: 8px; /* Abstand für Gleichmäßigkeit */
-}
+/* Kategorien: fixer Einzug, keine horizontale Verschiebung beim Selektieren */
+.tree-panel li:not([data-type="exercise-package"]) { padding-left: 8px; }
+.tree-panel li:not([data-type="exercise-package"]).selected { padding-left: 8px; }
 
-/* Stile für das Icon in selektierten Elementen */
-.tree-panel li.selected .knowledge-icon {
-    filter: brightness(0) invert(1); /* Icon in Weiß darstellen */
-}
-
-/* Stile für den Pfeil in selektierten Elementen */
-.tree-panel li.selected .expand-icon {
-    color: white; /* Weiße Pfeilfarbe */
-}
-
-/* WebP-Icon für Wissensgebiete (bleibt links) */
-.knowledge-icon {
-    width: 20px;
-    height: 20px;
-    margin-right: 8px;
-    flex-shrink: 0;
-}
-
-/* Pfeil-Icon (▶ / ▼) immer exakt am rechten Rand positionieren */
-.expand-icon {
-    position: absolute;
-    right: 8px; /* Abstand zum rechten Rand */
-    top: 50%;
-    transform: translateY(-50%); /* Zentriert den Pfeil vertikal */
-    color: #007BFF;
-    font-weight: bold;
-    transition: transform 0.2s ease-in-out;
-}
-
-/* Entfernt den unteren Rahmen des letzten Listenelements */
-.tree-panel li:last-child {
-    border-bottom: none;
-}
-
-/* Stile für ExercisePackage-Elemente */
+/* Pakete: klarer Hintergrund + konstanter Einzug */
 .tree-panel li[data-type="exercise-package"] {
-    background-color: #e0f7fa; /* Hellblauer Hintergrund für ExercisePackages */
-    display: flex;
-    align-items: center; /* Zentriert den Inhalt vertikal */
-    padding-left: 30px; /* Einrückung für das Icon */
+  background-color: #e0f7fa;
+  display: flex;
+  align-items: center;
+  padding-left: 30px;
+}
+.tree-panel li[data-type="exercise-package"]:hover { background-color: #b2ebf2; }
+
+/* Einheitlicher Selected-State (Kategorien & Pakete) */
+.tree-panel li.selected {
+  background-color: #007BFF;
+  color: #fff;
+  font-weight: 600;
+  outline: 2px solid #888;
+  outline-offset: -2px;
+  border-color: transparent;
+  border-radius: 4px;
 }
 
-.tree-panel li[data-type="exercise-package"]:hover {
-    background-color: #b2ebf2; /* Dunklerer Blauton beim Hover */
+/* Icons im Selected-State */
+.tree-panel li.selected .knowledge-icon {
+  filter: brightness(0) invert(1);
 }
 
-/* Stile für selektierte Exercise Packages */
-.tree-panel li[data-type="exercise-package"].selected {
-    background-color: #007BFF; /* Blaue Hintergrundfarbe */
-    color: white; /* Weiße Schrift */
-    font-weight: bold; /* Fettgedruckter Text */
-    padding: 5px 8px; /* Innenabstand */
-    border-radius: 4px; /* Abgerundete Ecken */
-    margin-left: 8px; /* Gleicher Abstand wie rechts */
-    margin-right: 8px; /* Abstand für Gleichmäßigkeit */
+/* Vorfahr (Kategorie) dezent markieren, wenn ein Paket selektiert ist */
+.tree-panel li.is-ancestor > div {
+  background: rgba(0, 123, 255, .12);
+  border-radius: 4px;
+  box-shadow: inset 3px 0 0 #007BFF;
 }
 
-/* Stile für das Icon in selektierten Exercise Packages */
-.tree-panel li[data-type="exercise-package"].selected .knowledge-icon {
-    filter: brightness(0) invert(1); /* Icon in Weiß darstellen */
+/* ========== Icons & Meta rechts ========== */
+.knowledge-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  flex-shrink: 0;
 }
 
-/* Resize-Handle */
+/* Rechtsleiste (Badge + Pfeil) */
+.row-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Pfeil normal im Flow */
+.expand-icon {
+  position: static;
+  transform: none;
+  color: #007BFF;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* Badge (einheitlich) */
+.pkg-badge {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: #eef;
+  color: #333;
+  white-space: nowrap;
+}
+
+/* ========== Resize Handle ========== */
 .resize-handle {
-    position: absolute;
-    right: -8px; /* Passt die Position an, um die Ränder zu überdecken */
-    top: -2px;
-    width: 16px; /* Breite des Balkens */
-    height: calc(100% + 2px);
-    cursor: ew-resize;
-    background-color: rgba(0, 123, 255, 0.5); /* Sichtbarer Hintergrund */
-    z-index: 10; /* Über anderen Elementen */
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  position: absolute;
+  right: -8px;
+  top: -2px;
+  width: 16px;
+  height: calc(100% + 2px);
+  cursor: ew-resize;
+  background-color: rgba(0, 123, 255, 0.5);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-
-/* Stelle sicher, dass das Icon IM BALKEN bleibt */
 .resize-handle::after {
-    content: '↔';
-    font-size: 18px;
-    color: #007BFF;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
+  content: '↔';
+  font-size: 18px;
+  color: #007BFF;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.left-resize-handle {
-    left: -5px;
-}
-
-.right-resize-handle {
-    right: -5px;
-}
-
-/* Detail-Panel */
+/* ========== Detail Panel (unter dem Tree) ========== */
 .detail-panel {
-    position: relative;
-    border-top: 2px solid #ccc;
-    border-bottom: 2px solid #ccc;
-    background-color: rgb(20, 44, 92);
-    min-width: 300px; /* Minimale Breite des Panels */
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; /* Verteilt den Inhalt zwischen oben und unten */
-    padding: 10px;
+  position: relative;
+  border-top: 2px solid #ccc;
+  border-bottom: 2px solid #ccc;
+  background-color: rgb(20, 44, 92);
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
 }
 
-.detail-content {
-    flex-grow: 1; /* Nimmt den verfügbaren Platz ein */
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between; /* Titel oben, Datumszeilen unten */
-}
-
-.package-title {
-    margin-top: 1px; /* Nur 5px Abstand vom oberen Rand */
-    margin-bottom: 1px; /* Abstand zwischen Titel und Beschreibung */
-}
-
-.package-description {
-    margin-top: -15px;
-    margin-bottom: 10px; /* Abstand zwischen Beschreibung und Datumszeilen */
-}
-
-.date-container {
-    display: flex;
-    align-items: flex-end; /* Ausrichtung am unteren Rand */
-    gap: 10px; /* Abstand zwischen den Blöcken */
-    margin-bottom: -5px; /* 5px Abstand vom unteren Rand */
-}
-
-.date-labels, .date-values {
-    display: flex;
-    flex-direction: column;
-    gap: 5px; /* Abstand zwischen den Datumszeilen */
-}
-
-.date-label, .date-value {
-    margin: 0;
-    text-align: left; /* Linksbündige Ausrichtung */
-    font-size: 0.8em; /* Etwas kleiner als der Standardtext */
-}
-
-.date-label {
-    font-weight: bold; /* Fett (bold) darstellen */
-}
-
-/* ---------- Paket-Details: gut lesbar unter dem Tree ---------- */
-#package-details {
-  padding: 12px 0;
-}
+/* Lesbare Card-Optik im Ausgabebereich */
+#package-details { padding: 12px 0; }
 
 #package-details .detail-panel {
   background: #ffffff;
-  color: #111111;                     /* hoher Kontrast */
+  color: #111111;
   border: 1px solid #d0d7de;
   border-radius: 12px;
   box-shadow: 0 1px 2px rgba(0,0,0,.06);
@@ -261,12 +199,19 @@ h1 {
   margin: 0 0 8px 0;
   font-size: 20px;
   line-height: 1.3;
-  color: #111111;                     /* explizit dunkel */
+  color: #111111;
 }
 
-#package-details .detail-content .description {
+#package-details .detail-content h3.package-title {
+  margin: 2px 0 8px 0;
+  font-size: 18px;
+  line-height: 1.35;
+  color: inherit;
+}
+
+#package-details .description {
   margin: 6px 0 12px 0;
-  color: #222222;                     /* etwas heller als Überschrift, aber stark */
+  color: #222222;
 }
 
 #package-details .divider {
@@ -285,163 +230,69 @@ h1 {
 
 #package-details .date-label {
   margin: 0;
-  color: #444444;                     /* Labels etwas abgesetzt */
+  color: #444444;
   font-weight: 600;
 }
-
 #package-details .date-value {
   margin: 0;
-  color: #111111;                     /* Werte maximal lesbar */
+  color: #111111;
 }
 
-#package-details a {
-  color: #0b57d0;                     /* gut lesbares Link-Blau */
-  text-decoration: none;
-}
+#package-details a { color: #0b57d0; text-decoration: none; }
 #package-details a:hover { text-decoration: underline; }
 
-/* Optional: leichte Typo-Glättung */
+/* Typo-Glättung */
 #package-details, #package-details * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ---------- Dark mode (falls Seite dunkel ist) ---------- */
-@media (prefers-color-scheme: dark) {
-  #package-details .detail-panel {
-    background: #161b22;
-    color: #e6edf3;
-    border-color: #30363d;
-    box-shadow: none;
-  }
-  #package-details .detail-content h2 { color: #e6edf3; }
-  #package-details .detail-content .description { color: #d0d7de; }
-  #package-details .divider { background: #30363d; }
-  #package-details .date-label { color: #c9d1d9; }
-  #package-details .date-value { color: #f0f6fc; }
-  #package-details a { color: #58a6ff; }
-}
-/* Paket: nach Klick leicht nach rechts "springen" */
-.tree-panel li[data-type="exercise-package"] > div {
-  transform: translateX(0);
-  transition: transform 120ms ease, outline-color 120ms ease;
-  will-change: transform;
-}
-
-/* ausgewähltes Paket */
-.tree-panel li[data-type="exercise-package"].selected > div {
-  transform: translateX(16px); /* verschiebt nach rechts */
-}
-
-/* Auswahl-Highlight OHNE Layout-Verschiebung */
-.tree-panel li[data-type="exercise-package"].selected {
-  border-color: transparent !important;     /* vorhandene Border neutralisieren */
-  outline: 2px solid #888;                  /* sichtbare Markierung */
-  outline-offset: -2px;
-  box-sizing: border-box;
-}
-
-/* Dark mode Tweaks (optional) */
-@media (prefers-color-scheme: dark) {
-  .tree-panel li[data-type="exercise-package"].selected {
-    outline-color: #9aa4b2;
-  }
-}
-
-/* Einheitliches Verhalten: ausgewählte Einträge rücken nach rechts ein
-   (gilt für Kategorien und Pakete) */
-.tree-panel li {
-  box-sizing: border-box;
-  padding-left: 8px;                 /* Grund-Einzug für alle */
-  transition: padding-left 120ms ease;
-}
-
-/* ausgewählt = weiter rechts */
-.tree-panel li.selected {
-  padding-left: 24px;                /* „springt“ nach rechts */
-}
-
-/* falls du NUR Pakete so willst, dann statt .tree-panel li.selected: */
- /* .tree-panel li[data-type="exercise-package"].selected { padding-left: 24px; } */
-
-/* Markierung ohne Layout-Verschiebung */
-.tree-panel li.selected {
-  outline: 2px solid #888;           /* sichtbare Auswahl */
-  outline-offset: -2px;
-  border-color: transparent !important;
-}
-
-/* Optional Dark Mode Kontrast */
-@media (prefers-color-scheme: dark) {
-  .tree-panel li.selected { outline-color: #9aa4b2; }
-}
-
-/* WICHTIG: Frühere Transform-Regeln neutralisieren (falls noch vorhanden) */
-.tree-panel li[data-type="exercise-package"] > div {
-  transform: none !important;
-  transition: none !important;
-}
-
-/* Fix: ausgewähltes Paket behält den 30px-Einzug wie im Normalzustand */
-.tree-panel li[data-type="exercise-package"].selected {
-  padding-left: 30px !important;
-}
-/* Bessere Erkennbarkeit der Icons im selektierten Zustand (Pakete & Kategorien) */
-.tree-panel li.selected .knowledge-icon {
-  /* bleibt weiß, bekommt aber eine feine dunkle Kontur */
-  filter: brightness(0) invert(1)
-          drop-shadow(0 0 0.8px rgba(0,0,0,0.95))
-          drop-shadow(0 0 2px rgba(0,0,0,0.35)) !important;
-  opacity: 1;
-}
-/* Icon in ausgewählten Einträgen (Kategorien & Pakete) klar sichtbar machen */
-.tree-panel li.selected .knowledge-icon {
-  display: inline-block;              /* falls <img> sich sonst „zusammenzieht“ */
-  filter: none !important;            /* überschreibt evtl. invert/brightness-Regeln */
-  background-color: #ffffff;          /* weißer Hintergrund hinter dem Icon */
-  border-radius: 4px;                 /* leicht abrunden */
-  padding: 2px;                       /* kleine „Plakette“ um das Icon */
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.25); /* dünne Kontur für Kontrast */
-}
-/* Vorfahr (Kategorie) dezent markieren, wenn ein Paket selektiert ist */
-.tree-panel li.is-ancestor > div {
-  background: rgba(0,123,255,.08);
-  border-radius: 4px;
-}
-/* Kategorien: niemals horizontal verrücken (weder normal noch selected) */
-.tree-panel li:not([data-type="exercise-package"]) {
-  margin-left: 0 !important;
-  padding-left: 8px !important;        /* Basis wie deine Zeilen-Defaults */
-}
-.tree-panel li:not([data-type="exercise-package"]) > div {
-  margin-left: 0 !important;
-  justify-content: flex-start !important;
-}
-
-/* Auch im selektierten Zustand keinen zusätzlichen Einzug */
-.tree-panel li:not([data-type="exercise-package"]).selected {
-  margin-left: 0 !important;
-  padding-left: 8px !important;
-}
-.tree-panel li:not([data-type="exercise-package"]).selected > div {
-  margin-left: 0 !important;
-}
-/* Kompakte Formular-Gitter für Kategorie-Panel */
+/* ========== Formular-Grid & Inputs ========== */
 .kt-form-grid {
   display: grid;
-  grid-template-columns: 160px 1fr;  /* Label | Feld */
-  gap: 8px 12px;
-  align-items: center;
+  grid-template-columns: 160px 1fr;
+  column-gap: 16px;
+  row-gap: 10px;
+  align-items: start;
   margin-top: 6px;
 }
-
 .kt-form-grid label {
   font-weight: 600;
   color: #444;
   line-height: 1.3;
 }
 
-/* Inputs wie bisher, nur leicht verfeinert */
+/* Im Details-Bereich harte Ausrichtung erzwingen */
+#package-details .kt-form-grid {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 10px;
+  align-items: start;
+}
+#package-details .kt-form-grid > label {
+  grid-column: 1 / 2;
+  justify-self: start;
+  align-self: start;
+  display: block;
+  margin: 0;
+}
+#package-details .kt-form-grid > input.kt-input,
+#package-details .kt-form-grid > .kt-output,
+#package-details .kt-form-grid > textarea.kt-input {
+  grid-column: 2 / 3;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* Spacer-Zeile */
+.kt-form-grid .kt-spacer,
+#package-details .kt-form-grid .kt-spacer {
+  grid-column: 1 / -1;
+  height: 12px;
+}
+
 .kt-input {
   width: 100%;
   padding: 8px;
@@ -453,165 +304,52 @@ h1 {
 }
 .kt-input--readonly {
   background: #f6f8fa;
+  color: #444;
+  border: 1px solid #d0d7de;
 }
 
-/* Mobile: Labels über dem Feld */
-@media (max-width: 640px) {
-  .kt-form-grid {
-    grid-template-columns: 1fr;      /* 1 Spalte */
-  }
-  .kt-form-grid label {
-    margin-top: 6px;
-  }
-}
-
-/* Dark Mode Harmonisierung */
-@media (prefers-color-scheme: dark) {
-  .kt-form-grid label { color: #c9d1d9; }
-  .kt-input {
-    background: #0d1117;
-    color: #e6edf3;
-    border-color: #30363d;
-  }
-  .kt-input--readonly {
-    background: #161b22;
-  }
-}
-
-/* Editierbare Inputs immer mit weißem Hintergrund (auch im Dark Mode) */
+/* Editierbare Inputs immer hell (auch im Dark Mode) */
 .kt-input--editable {
   background: #ffffff !important;
   color: #111111 !important;
   border: 1px solid #d0d7de;
 }
-@media (prefers-color-scheme: dark) {
-  .kt-input--editable {
-    background: #ffffff !important;
-    color: #111111 !important;
-    border-color: #d0d7de;
-  }
+
+/* Textarea-Grundhöhe & Resize */
+.kt-form-grid textarea.kt-input,
+#package-details .kt-form-grid > textarea.kt-input {
+  min-height: 120px;
+  resize: vertical;
 }
 
-/* Read-only leicht absetzen (falls noch nicht vorhanden) */
-.kt-input--readonly {
-  background: #f6f8fa;
-  color: #444;
-  border: 1px solid #d0d7de;
-}
-
-/* Deutlichere Hervorhebung der Kategorie, zu der das selektierte Paket gehört */
-.tree-panel li.is-ancestor > div {
-  background: rgba(0, 123, 255, 0.18);
-  box-shadow: inset 3px 0 0 #007BFF;   /* linker Farbbalken ohne Layout-Shift */
-  border-radius: 4px;
-}
-@media (prefers-color-scheme: dark) {
-  .tree-panel li.is-ancestor > div {
-    background: rgba(88, 166, 255, 0.18);
-    box-shadow: inset 3px 0 0 #58a6ff;
-  }
-}
-/* Reines Ausgabefeld (nicht fokussierbar/anklickbar), optisch wie ein Input */
+/* Reines Ausgabefeld (optisch wie Input) */
 .kt-output {
-  background: #f6f8fa;              /* leicht abgesetzt */
+  background: #f6f8fa;
   color: #111;
   border: 1px solid #d0d7de;
   border-radius: 8px;
   padding: 8px;
   line-height: 1.4;
-  min-height: 38px;                  /* Höhe wie Input */
+  min-height: 38px;
   box-sizing: border-box;
-  pointer-events: none;              /* nicht anklickbar */
-  user-select: none;                 /* Text nicht markierbar */
+  pointer-events: none;
+  user-select: none;
   cursor: default;
 }
 
-@media (prefers-color-scheme: dark) {
-  .kt-output {
-    background: #161b22;
-    color: #e6edf3;
-    border-color: #30363d;
-  }
-}
-/* Action-Leiste unter den Panels */
-.kt-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-/* Basis-Button */
-.kt-btn {
-  appearance: none;
-  border: 1px solid #d0d7de;
-  background: #f6f8fa;
-  color: #111;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font: inherit;
-  cursor: pointer;
-  line-height: 1.2;
-}
-.kt-btn:hover { background: #e9eef3; }
-
-/* Primär & Danger */
-.kt-btn--primary {
-  background: #0b57d0;
-  border-color: #0b57d0;
-  color: #fff;
-}
-.kt-btn--primary:hover { filter: brightness(0.97); }
-
-.kt-btn--danger {
-  background: #fee2e2;
-  border-color: #fecaca;
-  color: #991b1b;
-}
-.kt-btn--danger:hover { background: #fecaca; }
-
-/* Paket-Titel (h3) etwas kleiner als H2 */
-#package-details .detail-content h3.package-title {
-  margin: 2px 0 8px 0;
-  font-size: 18px;
-  line-height: 1.35;
-  color: inherit;
-}
-
-/* Dark Mode */
-@media (prefers-color-scheme: dark) {
-  .kt-btn {
-    background: #0d1117;
-    border-color: #30363d;
-    color: #e6edf3;
-  }
-  .kt-btn:hover { background: #161b22; }
-  .kt-btn--primary {
-    background: #2563eb;
-    border-color: #2563eb;
-    color: #fff;
-  }
-  .kt-btn--danger {
-    background: rgba(190, 18, 60, 0.2);
-    border-color: rgba(248, 113, 113, 0.45);
-    color: #fecaca;
-  }
-}
-
-/* Actions-Panel (als kleine Card) */
+/* ========== Actions & Buttons ========== */
 .kt-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 14px;                 /* Abstand vom Formular */
+  margin-top: 14px;
   padding: 10px 12px;
-  background: #f8fafc;              /* zartes Hellgrau/Blau */
+  background: #f8fafc;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
 
-/* Buttons – modern, klar, mit Fokus-/Hover-States */
 .kt-btn {
   appearance: none;
   display: inline-flex;
@@ -633,41 +371,58 @@ h1 {
   background: #f3f4f6;
   border-color: #c9d2da;
 }
-.kt-btn:active {
-  transform: translateY(1px);
-}
-.kt-btn:focus-visible {
-  outline: 2px solid #0b57d0;
-  outline-offset: 2px;
-}
+.kt-btn:active { transform: translateY(1px); }
+.kt-btn:focus-visible { outline: 2px solid #0b57d0; outline-offset: 2px; }
 
-/* Varianten */
 .kt-btn--primary {
   background: #0b57d0;
   border-color: #0b57d0;
   color: #fff;
 }
-.kt-btn--primary:hover {
-  filter: brightness(0.98);
-}
+.kt-btn--primary:hover { filter: brightness(0.98); }
 
 .kt-btn--danger {
   background: #fee2e2;
   border-color: #fecaca;
   color: #7f1d1d;
 }
-.kt-btn--danger:hover {
-  background: #fecaca;
-}
+.kt-btn--danger:hover { background: #fecaca; }
 
-/* Optional: kleine Symbolchen vor den Buttons per data-action */
+/* Kleine Symbolchen per data-action (optional) */
 .kt-btn[data-action="insert-before"]::before { content: "＋"; }
 .kt-btn[data-action="insert-after"]::before  { content: "＋"; }
 .kt-btn[data-action="update"]::before        { content: "✎"; }
 .kt-btn[data-action="delete"]::before        { content: "🗑"; }
 
-/* Dark Mode Anpassungen */
+/* ========== Dark Mode Tweaks ========== */
 @media (prefers-color-scheme: dark) {
+  .tree-panel li.selected { outline-color: #9aa4b2; }
+  .tree-panel li.is-ancestor > div {
+    background: rgba(88, 166, 255, 0.18);
+    box-shadow: inset 3px 0 0 #58a6ff;
+  }
+
+  #package-details .detail-panel {
+    background: #161b22;
+    color: #e6edf3;
+    border-color: #30363d;
+    box-shadow: none;
+  }
+  #package-details .detail-content h2 { color: #e6edf3; }
+  #package-details .description { color: #d0d7de; }
+  #package-details .divider { background: #30363d; }
+  #package-details .date-label { color: #c9d1d9; }
+  #package-details .date-value { color: #f0f6fc; }
+  #package-details a { color: #58a6ff; }
+
+  .kt-form-grid label { color: #c9d1d9; }
+  .kt-input {
+    background: #0d1117;
+    color: #e6edf3;
+    border-color: #30363d;
+  }
+  .kt-input--readonly { background: #161b22; }
+
   .kt-actions {
     background: #0d1117;
     border-color: #30363d;
@@ -682,72 +437,6 @@ h1 {
   .kt-btn:hover { background: #1f2733; border-color: #3a4250; }
   .kt-btn--primary { background: #2563eb; border-color: #2563eb; color: #fff; }
   .kt-btn--danger  { background: rgba(190,18,60,.18); border-color: rgba(248,113,113,.5); color: #fecaca; }
-}
 
-/* Grid: Labels (links), Felder (rechts), einheitliche Breiten */
-.kt-form-grid {
-  display: grid;
-  grid-template-columns: 160px 1fr;  /* 1: Labels, 2: Inputs/Textareas */
-  column-gap: 16px;
-  row-gap: 10px;
-  align-items: start;                 /* Label/Text oben ausrichten */
+  /* Editierbare Inputs bleiben hell, wie oben erzwungen */
 }
-
-/* Alle Eingabefelder (inkl. Textarea) gleich breit */
-.kt-form-grid .kt-input {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* Textarea-Größe/Verhalten */
-.kt-form-grid textarea.kt-input {
-  min-height: 120px;
-  resize: vertical;
-}
-
-/* Absetzer vor der Beschreibung, bleibt im Grid */
-.kt-form-grid .kt-spacer {
-  grid-column: 1 / -1;  /* über beide Spalten */
-  height: 12px;
-}
-/* --- Harte Ausrichtung im Details-Bereich (überschreibt ältere Regeln) --- */
-#package-details .kt-form-grid {
-  display: grid;
-  grid-template-columns: 160px minmax(0, 1fr); /* 1: Labels, 2: Felder */
-  column-gap: 16px;
-  row-gap: 10px;
-  align-items: start;       /* alles oben ausrichten */
-}
-
-/* Labels stets in Spalte 1 */
-#package-details .kt-form-grid > label {
-  grid-column: 1 / 2;
-  justify-self: start;
-  align-self: start;
-  display: block;           /* verhindert Inline-Verschiebungen */
-  margin: 0;
-}
-
-/* Alle Felder (Input, Output, Textarea) strikt in Spalte 2, volle Breite */
-#package-details .kt-form-grid > input.kt-input,
-#package-details .kt-form-grid > .kt-output,
-#package-details .kt-form-grid > textarea.kt-input {
-  grid-column: 2 / 3;
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-}
-
-/* Abstand vor der Beschreibung – bleibt zeilenbündig im Grid */
-#package-details .kt-form-grid .kt-spacer {
-  grid-column: 1 / -1;
-  height: 12px;
-}
-
-/* Optional: Textarea-Grundhöhe & Resize-Verhalten vereinheitlichen */
-#package-details .kt-form-grid > textarea.kt-input {
-  min-height: 120px;
-  resize: vertical;
-}
-/* optional statt Inline-Styling */
-.pkg-badge { margin-left:auto; font-size:12px; padding:2px 6px; border-radius:10px; background:#eef; color:#333; }
