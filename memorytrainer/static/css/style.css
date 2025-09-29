@@ -480,3 +480,37 @@ h1 {
 
 .kt-crumb-sep { opacity: .6; }
 .kt-crumb--leaf { background: #0b57d0; color: #fff; border-color: #0b57d0; }
+
+/* Der Listeneintrag selbst */
+.tree-panel li { position: relative; }
+
+/* Overlay (falls du sowas hast) muss UNTER dem Inhalt liegen */
+.tree-panel li::before {
+  z-index: 0;               /* wichtig */
+}
+
+/* Inhalt über das Overlay heben */
+.tree-panel li > div {
+  position: relative;
+  z-index: 1;
+}
+/* Grundzustand der Icons */
+.tree-panel li .knowledge-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  filter: none !important;
+  opacity: 1 !important;
+  mix-blend-mode: normal;
+}
+
+/* (optional) wenn du standardmäßig abdunkelst, dann nur bei :not(.selected) */
+.tree-panel li:not(.selected) .knowledge-icon {
+  opacity: 0.85;           /* dezente Entsättigung für unselektiert */
+  filter: none;
+}
+.tree-panel li.selected .knowledge-icon {
+  filter: brightness(0) invert(1);
+  opacity: 1;
+}

@@ -12,6 +12,28 @@
   const treeContainer = document.getElementById('tree-container');
   if (!treeContainer) return;
 
+  function refreshBreadcrumb() {
+    const host = document.getElementById('kt-breadcrumb');
+    if (!host) return;
+
+    const sel = selectedElement;
+    if (!sel) { host.innerHTML = ''; return; }
+
+    // Paket ausgewählt → Kategorienpfad + Paketname anhängen
+    if (sel.getAttribute('data-type') === 'exercise-package') {
+      const parentId = sel.getAttribute('data-parent-id');
+      const catLi = parentId ? findLiById(parentId) : null;
+      const leafName = (sel.dataset.name || sel.querySelector('span')?.textContent || '').trim();
+      const path = getPathForLi(catLi || sel);
+      renderBreadcrumbFromPath(path, leafName);
+    } else {
+      // Kategorie ausgewählt → nur Kategorienpfad
+      const path = getPathForLi(sel);
+      renderBreadcrumbFromPath(path, null);
+    }
+  }
+
+
   // ---- utils ----
   function clearPathMarks() {
     document.querySelectorAll('.tree-panel li.path-ancestor, .tree-panel li.is-ancestor')
@@ -197,8 +219,8 @@
       categoryLi.classList.add('is-ancestor');
 
       selectElement(liToSelect, true);
-      const leafName = liToSelect.dataset.name || liToSelect.querySelector('span')?.textContent || '';
-      activatePathFor(categoryLi, leafName); // Paket ist selektiert → mit Leaf      const data = await loadPackageDetails(selectPkgId);
+      refreshBreadcrumb()
+      const data = await loadPackageDetails(selectPkgId);
       if (data) await createDetailPanel(data, levelBase + 2);
     }
   }
@@ -243,7 +265,7 @@
       const pkgName = li.dataset.name || li.querySelector('span')?.textContent || '';
       const parentId = li.getAttribute('data-parent-id');
       const catLi = parentId ? findLiById(parentId) : null;
-      activatePathFor(catLi || li, pkgName); // zeigt Paketname nur bei Paket-Auswahl
+      refreshBreadcrumb()
       loadPackageDetails(pkgId)
         .then(data => { if (data) createDetailPanel(data, level + 2); })
         .catch(console.error);
@@ -801,7 +823,8 @@
                 ev.stopPropagation();
                 selectElement(packageLi, true);
                 const leafName = (packageLi.dataset.name || packageLi.querySelector('span')?.textContent || '').trim();
-                activatePathFor(li, leafName); // li = zugehörige Kategorie                document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
+                refreshBreadcrumb()
+                document.querySelectorAll('.tree-panel li.is-ancestor').forEach(n => n.classList.remove('is-ancestor'));
                 li.classList.add('is-ancestor');
                 const data = await loadPackageDetails(pkg.pk);
                 if (data) await createDetailPanel(data, level + 2);
@@ -1338,23 +1361,69 @@
     if (createBtn) createBtn.textContent = 'Neu anlegen';
   }
 
+  async function postPackage(payload) {
+    const endpoints = [
+      `${API_BASE}/package/`,        // bevorzugt (falls vorhanden)
+      `${API_BASE}/packages/`,       // Alternative (plural)
+      `${API_BASE}/package/create/`  // Alternative (create-Route)
+    ];
+    let lastErr = '';
+
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            [CSRF_HEADER_NAME]: getCookie('csrftoken') || ''
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) return res.json();
+
+        // 404/405 => nächsten Endpoint probieren
+        if (res.status === 404 || res.status === 405) {
+          lastErr = await res.text().catch(() => '');
+          continue;
+        }
+
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Create failed ${res.status}: ${txt}`);
+      } catch (e) {
+        lastErr = String(e);
+        // nächsten Endpoint versuchen
+      }
+    }
+
+    throw new Error(`Keine gültige Package-Create-Route gefunden. Letzte Antwort: ${lastErr}`);
+  }
+
   async function handlePackageCreate() {
     const host   = getDetailsHost();
     const tempId = host.dataset.packageId;
-    const liDraft = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${CSS.escape(tempId)}"]`)
-                 || document.querySelector(`.tree-panel li.draft[data-id="${CSS.escape(tempId)}"]`);
+
+    // Draft-LI im Baum finden (Paket)
+    const liDraft =
+      document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${CSS.escape(tempId)}"]`) ||
+      document.querySelector(`.tree-panel li.draft[data-id="${CSS.escape(tempId)}"]`);
+
     if (!liDraft) { alert('Entwurf nicht gefunden.'); return; }
 
+    // Formular-Werte
     const nameEl    = host.querySelector('#pkg-name');
     const descEl    = host.querySelector('#pkg-desc');
     const changedEl = host.querySelector('#pkg-changed');
 
-    const title   = (nameEl?.value || '').trim();
+    const title = (nameEl?.value || '').trim();
     if (!title) { alert('Name muss angegeben werden'); nameEl?.focus(); return; }
 
     const created = host.dataset.packageCreated || formatDateISO(new Date());
     const changed = (changedEl?.value || formatDateISO(new Date()));
 
+    // Request-Payload
     const payload = {
       title,
       desc: (descEl?.value || '').trim(),
@@ -1362,58 +1431,102 @@
       changed,
       node_id: parseInt(host.dataset.nodeId, 10) || null,
     };
+
+    // relative Einfügeposition (optional)
     if (host.dataset.insertDirection && host.dataset.refPkgId) {
-      payload.direction = host.dataset.insertDirection;
+      payload.direction = host.dataset.insertDirection;   // 'before' | 'after'
       payload.ref_id    = parseInt(host.dataset.refPkgId, 10);
     }
 
-    const res = await fetch(`${API_BASE}/package/`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCookie('csrftoken') || ''
-      },
-      body: JSON.stringify(payload)
-    });
+    // --- POST mit Fallback auf alternative Endpoints ---
+    const endpoints = [
+      `${API_BASE}/package/`,        // bevorzugt (wenn vorhanden)
+      `${API_BASE}/packages/`,       // Alternative (plural)
+      `${API_BASE}/package/create/`  // Alternative (explizite create-Route)
+    ];
 
-    if (!res.ok) {
-      const msg = await res.text().catch(()=> '');
-      console.error(msg);
-      alert('Anlegen fehlgeschlagen.');
-      return;
+    let data = null;
+    let lastErr = '';
+
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken') || ''
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          data = await res.json();
+          break; // Erfolg → Schleife beenden
+        }
+
+        // 404/405: Nächsten Endpoint probieren
+        if (res.status === 404 || res.status === 405) {
+          lastErr = await res.text().catch(() => '');
+          continue;
+        }
+
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Create failed ${res.status}: ${txt}`);
+      } catch (e) {
+        lastErr = String(e);
+        // nächsten Endpoint versuchen
+      }
     }
 
-    const data = await res.json();
-    const newId = data.id;
-
-    // Host in "edit" umstellen
-    host.dataset.mode           = 'edit';
-    host.dataset.packageId      = String(newId);
-    host.dataset.packageName    = data.title || title;
-    host.dataset.packageChanged = data.changed || changed;
-
-    // Eltern-Unterkategorie (als <li>) ermitteln
-    const parentNodeId = liDraft.getAttribute('data-parent-id');
-    const catLi = parentNodeId
-        ? document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(parentNodeId)}"]`)
-        : null;
-
-    // Komplett neu rendern — sortiert nach serverseitigem sort_order
-    // (entfernt automatisch den Draft-Knoten, weil alle Paket-LIs für diese Unterkategorie neu aufgebaut werden)
-    if (catLi) {
-      const cnt = (parseInt(catLi.dataset.pkgCount || '0', 10) || 0) + 1;
-      updatePkgBadge(catLi, cnt);
-      await rerenderPackagesForCategory(catLi, newId); // wählt newId direkt aus & zeigt Panel
-    } else {
-      // Fallback: Draft entfernen und nur Detailpanel anzeigen
-      liDraft.remove();
-      const full = await loadPackageDetails(newId);
-      const parentLevel =  parseInt(document.querySelector('.tree-panel [data-id="'+parentNodeId+'"]')?.closest('.tree-panel')?.getAttribute('data-level') || '0', 10);
-      if (full) await createDetailPanel(full, parentLevel + 2);
-    }
+  if (!data) {
+    console.error('Package-Create fehlgeschlagen:', lastErr);
+    alert('Anlegen fehlgeschlagen. Details in der Konsole.');
+    return;
   }
+
+  const newId = data.id ?? data.pk;
+  if (!newId) {
+    console.error('Package-Create: Antwort ohne ID', data);
+    alert('Anlegen fehlgeschlagen: Server-Antwort ohne ID.');
+    return;
+  }
+
+  // Host-Kontext in "edit" umstellen
+  host.dataset.mode           = 'edit';
+  host.dataset.packageId      = String(newId);
+  host.dataset.packageName    = data.title || title;
+  host.dataset.packageChanged = data.changed || changed;
+  // (insertDirection/refPkgId bleiben bestehen – stören nicht)
+
+  // Eltern-Unterkategorie finden
+  const parentNodeId = liDraft.getAttribute('data-parent-id');
+  const catLi = parentNodeId
+    ? document.querySelector(`.tree-panel li:not([data-type])[data-id="${CSS.escape(parentNodeId)}"]`)
+    : null;
+
+  // UI aktualisieren
+  if (catLi) {
+    // Zähler erhöhen + Badge updaten
+    const cnt = (parseInt(catLi.dataset.pkgCount || '0', 10) || 0) + 1;
+    catLi.dataset.pkgCount = String(cnt);
+    updatePkgBadge(catLi, cnt);
+
+    // Komplett neu rendern und das neue Paket selektieren
+    await rerenderPackagesForCategory(catLi, newId); // wählt newId direkt aus & lädt Detailpanel (siehe Patch)
+  } else {
+    // Fallback: Draft entfernen, Detailpanel direkt zeigen
+    liDraft.remove();
+    const full = await loadPackageDetails(newId);
+    const parentLevel = parseInt(
+      document.querySelector(`.tree-panel [data-id="${parentNodeId}"]`)?.closest('.tree-panel')?.getAttribute('data-level') || '0',
+      10
+    );
+    if (full) await createDetailPanel(full, parentLevel + 2);
+    if (typeof refreshBreadcrumb === 'function') refreshBreadcrumb();
+  }
+}
 
 
   async function handlePackageDelete() {
@@ -1567,6 +1680,7 @@
         createdOut.textContent = formatDate(data.created);
         host.dataset.categoryCreated = data.created;
       }
+      refreshBreadcrumb();
     } catch (err) {
       console.error(err);
       alert("Speichern fehlgeschlagen. Details in der Konsole.");
@@ -1632,7 +1746,7 @@
         changedEl.value = data.changed ? formatDateISO(data.changed) : newChanged;
       }
       // Name/Desc sind schon gesetzt (Inputs)
-
+      refreshBreadcrumb();
       console.log('Paket gespeichert:', data);
     } catch (err) {
       console.error(err);
