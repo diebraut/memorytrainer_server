@@ -1,19 +1,25 @@
-
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 from django.db import migrations
 
+from django.utils import timezone
+from django.db import models
+
 class TreeNode(models.Model):
     text = models.CharField(max_length=255)
     parent = models.ForeignKey('self', null=True, blank=True,
                                related_name='children', on_delete=models.CASCADE)
-    createDate = models.DateField()
-    changeDate = models.DateField()
-    sort_order = models.PositiveIntegerField(default=0, db_index=True)  # NEU
+
+    # NEU – mit Default (oder auto_* je nach Wunsch)
+    createDate = models.DateField(default=timezone.now)        # oder auto_now_add=True
+    changeDate = models.DateField(default=timezone.now)        # oder auto_now=True
+
+    sort_order = models.PositiveIntegerField(default=0, db_index=True)
 
     class Meta:
-        ordering = ['sort_order', 'id']  # stabile Reihenfolge je Ebene
+        ordering = ['sort_order', 'id']
 
 
 class ExercisePackage(models.Model):
@@ -22,18 +28,23 @@ class ExercisePackage(models.Model):
     createDate = models.DateField(default=timezone.now)
     changeDate = models.DateField(default=timezone.now)
     sort_order = models.IntegerField(default=0, db_index=True)
-    treeNode = models.ForeignKey(
-        TreeNode,
-        on_delete=models.CASCADE,
-        related_name='exercise_packages'
+    treeNode = models.ForeignKey('packages.TreeNode', on_delete=models.CASCADE, related_name='exercise_packages')
+
+    # NEU – Dateiauswahl aus ../data/uploads
+    packageAssignment = models.FilePathField(
+        path=str(settings.UPLOADS_DIR),          # s. settings.UPLOADS_DIR
+        match=r'.+\.(zip|xml|json)$',
+        recursive=False,
+        allow_files=True,
+        allow_folders=False,
+        max_length=512,
+        blank=True,
+        null=True,
+        verbose_name='Paketzurordnung',
     )
 
     class Meta:
         ordering = ['sort_order', 'id']
-
-    def __str__(self):
-        return self.packageName
-
 
 # Hilfsklasse (kein Django-Model) für Demo-Seeding
 class KnowledgeTree:

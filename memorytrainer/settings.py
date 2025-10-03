@@ -9,6 +9,10 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Verzeichnis mit hochgeladenen Paketen
+UPLOADS_DIR = BASE_DIR / "data" / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)  # sorgt dafür, dass es existiert
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-zkqox2%at$d80#$vbn^im7lmz%_7*%lwn()h$tox+!+4nnv2%k'
 
@@ -19,15 +23,14 @@ ALLOWED_HOSTS = []  # für Dev okay; sonst z.B. ["localhost","127.0.0.1"]
 
 # Application definition
 INSTALLED_APPS = [
-    "packages.apps.PackagesConfig",
-    "landing",            # deine Landing-Seiten-App
+    'packages.apps.PackagesConfig',
+    'landing',            # deine Landing-Seiten-App
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'django.contrib.staticfiles',
-]
+    'django.contrib.staticfiles']
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -93,3 +96,8 @@ STATICFILES_DIRS = [
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_REDIRECT_URL = '/pakete/'
+LOGOUT_REDIRECT_URL = '/accounts/login/'
+# optional:
+LOGIN_URL = '/accounts/login/'
