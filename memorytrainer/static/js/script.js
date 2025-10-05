@@ -380,125 +380,180 @@
   }
 
   // ---- package details (unten) ----
-  async function createDetailPanel(packageData, level) {
-    // vorhandenes Panel entfernen
-    removeDetailPanel();
 
-    const host = getDetailsHost();
+async function createDetailPanel(packageData, level) {
+  // vorhandenes Panel entfernen
+  removeDetailPanel();
 
-    // Ist das ein Draft? -> entweder hat der Host schon "draft" stehen ODER die ID ist eine temp-ID
-    const draftByHost = (host.dataset.mode === 'draft');
-    const draftById   = String(packageData.id || '').startsWith('pkg-new-');
-    const isDraft     = draftByHost || draftById;
+  const host = getDetailsHost();
 
-    // Panel neu aufbauen
-    host.innerHTML = '';
-    host.dataset.panelOwner = `package:${packageData.id ?? ''}`;
+  // Draft-Erkennung
+  const draftByHost = (host.dataset.mode === 'draft');
+  const draftById   = String(packageData.id || '').startsWith('pkg-new-');
+  const isDraft     = draftByHost || draftById;
 
-    // Kontext setzen (ID/Name/Daten)
-    host.dataset.packageId      = String(packageData.id || '');
-    host.dataset.packageName    = packageData.title   || '';
-    host.dataset.packageCreated = packageData.created || '';
-    host.dataset.packageChanged = packageData.changed || '';
-    host.dataset.mode           = isDraft ? 'draft' : 'edit';
+  // Panel-Kontext
+  host.innerHTML = '';
+  host.dataset.panelOwner = `package:${packageData.id ?? ''}`;
 
-    // nodeId sicher mitschreiben (für Neu-Anlage / Speichern)
-    // Reihenfolge der Quellen: Host (falls schon gesetzt) -> Daten vom Server -> markierte Unterkategorie
-    const fallbackNodeId =
-      document.querySelector('.tree-panel li.is-ancestor')?.getAttribute('data-id') || '';
-    host.dataset.nodeId = String(
-      host.dataset.nodeId ||
-      (packageData.node && packageData.node.id) ||
-      fallbackNodeId ||
-      ''
-    );
+  host.dataset.packageId      = String(packageData.id || '');
+  host.dataset.packageName    = packageData.title   || '';
+  host.dataset.packageCreated = packageData.created || '';
+  host.dataset.packageChanged = packageData.changed || '';
+  host.dataset.mode           = isDraft ? 'draft' : 'edit';
 
-    // Einfüge-Metadaten zurücksetzen (werden bei Insert neu gesetzt)
-    // WICHTIG: Im Draft NICHT löschen – wir brauchen die Einfüge-Metadaten fürs Anlegen
-    if (!isDraft) {
-      delete host.dataset.insertDirection;
-      delete host.dataset.refPkgId;
-    }
-    const createdPretty = packageData.created ? formatDate(packageData.created) : '';
-    const changedISO    = packageData.changed ? formatDateISO(packageData.changed)
-                                              : formatDateISO(new Date());
-    const actionLabel   = isDraft ? 'Neu anlegen' : 'Paket ändern';
+  // nodeId sicher mitschreiben
+  const fallbackNodeId =
+    document.querySelector('.tree-panel li.is-ancestor')?.getAttribute('data-id') || '';
+  host.dataset.nodeId = String(
+    host.dataset.nodeId ||
+    (packageData.node && packageData.node.id) ||
+    fallbackNodeId ||
+    ''
+  );
 
-    const panel = document.createElement('div');
-    panel.className = 'detail-panel';
-    panel.setAttribute('data-level', level);
-    panel.style.marginTop = '12px';
-    panel.style.width = '100%';
-    panel.style.boxSizing = 'border-box';
-
-    panel.innerHTML = `
-        <div class="detail-content">
-          <h2>Packagebeschreibung</h2>
-    
-          <div class="kt-form-grid">
-            <label for="pkg-name">Name</label>
-            <input id="pkg-name" type="text"
-                   class="kt-input kt-input--editable"
-                   value="${escapeHtml(packageData.title || '')}">
-    
-            <label>Erzeugt am</label>
-            <div id="pkg-created" class="kt-output" aria-readonly="true" tabindex="-1">
-              ${escapeHtml(createdPretty)}
-            </div>
-    
-            <label for="pkg-changed">Geändert am</label>
-            <input id="pkg-changed" type="date"
-                   class="kt-input kt-input--editable"
-                   value="${escapeHtml(changedISO)}">
-    
-            <!-- etwas Luft vor der Beschreibung, aber im Grid -->
-            <div class="kt-spacer" aria-hidden="true"></div>
-    
-            <!-- Label in Spalte 1, Textarea in Spalte 2 -->
-            <label for="pkg-desc">Inhaltsbeschreibung</label>
-            <textarea id="pkg-desc"
-                      class="kt-input kt-input--editable"
-                      rows="6"></textarea>
-            <label for="pkg-assign">Paketzuordnung</label>
-            <div>
-              <select id="pkg-assign">
-                <option value="">— laden —</option>
-              </select>
-            </div>                      
-          </div>
-    
-          <div class="kt-actions" role="group" aria-label="Paket-Aktionen">
-            <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-before">Neues Paket (davor)</button>
-            <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-after">Neues Paket (danach)</button>
-            <button type="button" class="kt-btn kt-btn--primary" data-scope="package" data-action="update">${actionLabel}</button>
-            <button type="button" class="kt-btn kt-btn--danger"  data-scope="package" data-action="delete">Paket löschen</button>
-          </div>
-        </div>
-      `;
-
-    // Beschreibungstext sicher einsetzen (nach dem Einfügen)
-    const descEl = panel.querySelector('#pkg-desc');
-    if (descEl) descEl.value = packageData.desc || '';
-
-    // Wenn Draft: Insert-/Delete-Buttons ausblenden
-    if (isDraft) {
-      const actions = panel.querySelector('.kt-actions');
-      actions.querySelectorAll(
-        '[data-action="insert-before"], [data-action="insert-after"], [data-action="delete"]'
-      ).forEach(b => b.style.display = 'none');
-      const discardBtn = document.createElement('button');
-      discardBtn.type = 'button';
-      discardBtn.className = 'kt-btn';
-      discardBtn.dataset.scope = 'package';
-      discardBtn.dataset.action = 'discard';
-      discardBtn.textContent = 'Verwerfen';
-      actions.insertBefore(discardBtn, actions.firstChild);
-   }
-   host.appendChild(panel);
-   const assignSel = panel.querySelector('#pkg-assign');
-   // Falls du später mal einen Wert mitliefern willst: packageData.assignment || ''
-   loadUploadsIntoSelect(assignSel, '');
+  // Einfüge-Metadaten zurücksetzen (außer im Draft)
+  if (!isDraft) {
+    delete host.dataset.insertDirection;
+    delete host.dataset.refPkgId;
   }
+
+  const createdPretty = packageData.created ? formatDate(packageData.created) : '';
+  const changedISO    = packageData.changed ? formatDateISO(packageData.changed)
+                                            : formatDateISO(new Date());
+  const actionLabel   = isDraft ? 'Neu anlegen' : 'Paket ändern';
+
+  // Panel-HTML
+  const panel = document.createElement('div');
+  panel.className = 'detail-panel';
+  panel.setAttribute('data-level', level);
+  panel.style.marginTop = '12px';
+  panel.style.width = '100%';
+  panel.style.boxSizing = 'border-box';
+
+  panel.innerHTML = `
+    <div class="detail-content">
+      <h2>Packetbeschreibung</h2>
+
+      <div class="kt-form-grid">
+        <label for="pkg-name">Name</label>
+        <input id="pkg-name" type="text"
+               class="kt-input kt-input--editable"
+               value="${escapeHtml(packageData.title || '')}">
+
+        <label>Erzeugt am</label>
+        <div id="pkg-created" class="kt-output" aria-readonly="true" tabindex="-1">
+          ${escapeHtml(createdPretty)}
+        </div>
+
+        <label for="pkg-changed">Geändert am</label>
+        <input id="pkg-changed" type="date"
+               class="kt-input kt-input--editable"
+               value="${escapeHtml(changedISO)}">
+
+        <div class="kt-spacer" aria-hidden="true"></div>
+
+        <label for="pkg-desc">Inhaltsbeschreibung</label>
+        <textarea id="pkg-desc"
+                  class="kt-input kt-input--editable"
+                  rows="6"></textarea>
+
+        <!-- NEU: Paketzurordnung + Aktualisieren -->
+        <label for="pkg-filelist">Paketzuordnung</label>
+        <div class="kt-file-row" style="display:flex; align-items:center; gap:8px;">
+          <select id="pkg-filelist" size="6" class="kt-input"
+                  style="flex:1 1 70%; max-width:70%;"></select>
+          <button type="button" class="kt-btn" id="btn-refresh-uploads">Aktualisieren</button>
+        </div>
+      </div>
+
+      <div class="kt-actions" role="group" aria-label="Paket-Aktionen">
+        <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-before">Neues Paket (davor)</button>
+        <button type="button" class="kt-btn"                 data-scope="package" data-action="insert-after">Neues Paket (danach)</button>
+        <button type="button" class="kt-btn kt-btn--primary" data-scope="package" data-action="update">${actionLabel}</button>
+        <button type="button" class="kt-btn kt-btn--danger"  data-scope="package" data-action="delete">Paket löschen</button>
+      </div>
+    </div>
+  `;
+
+  // Beschreibung füllen
+  const descEl = panel.querySelector('#pkg-desc');
+  if (descEl) descEl.value = packageData.desc || '';
+
+  // Draft: Buttons ausblenden + "Verwerfen" einfügen
+  if (isDraft) {
+    const actions = panel.querySelector('.kt-actions');
+    actions.querySelectorAll(
+      '[data-action="insert-before"], [data-action="insert-after"], [data-action="delete"]'
+    ).forEach(b => b.style.display = 'none');
+
+    const discardBtn = document.createElement('button');
+    discardBtn.type = 'button';
+    discardBtn.className = 'kt-btn';
+    discardBtn.dataset.scope = 'package';
+    discardBtn.dataset.action = 'discard';
+    discardBtn.textContent = 'Verwerfen';
+    actions.insertBefore(discardBtn, actions.firstChild);
+  }
+
+  host.appendChild(panel);
+
+  // ---- Upload-Liste (Listbox + Aktualisieren) ----
+  const fileListEl = panel.querySelector('#pkg-filelist');
+  const refreshBtn = panel.querySelector('#btn-refresh-uploads');
+
+  // versucht zuerst /api/package/<id>/uploads/, fällt zurück auf /api/uploads/
+  async function fetchUploadsForPackage(pkgId) {
+    const endpoints = [
+      `${API_BASE}/package/${encodeURIComponent(pkgId || 0)}/uploads/`,
+      `${API_BASE}/uploads/`
+    ];
+    for (const url of endpoints) {
+      try {
+        const data = await fetchJSON(url);
+        return Array.isArray(data) ? data : (data.files || data.items || []);
+      } catch (e) {
+        const msg = String(e);
+        if (msg.includes('HTTP 404') || msg.includes('HTTP 405')) {
+          continue; // nächsten Endpoint probieren
+        }
+        throw e;
+      }
+    }
+    return [];
+  }
+
+  async function loadUploadList() {
+    if (!fileListEl) return;
+    const keep = fileListEl.value; // aktuelle Auswahl merken
+    const files = await fetchUploadsForPackage(host.dataset.packageId).catch(err => {
+      console.error('Uploads laden fehlgeschlagen:', err);
+      return [];
+    });
+    fileListEl.innerHTML = '';
+    files.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = String(name);
+      opt.textContent = String(name);
+      fileListEl.appendChild(opt);
+    });
+    // alte Auswahl wiederherstellen
+    if (keep) {
+      const found = Array.from(fileListEl.options).find(o => o.value === keep);
+      if (found) fileListEl.value = keep;
+    }
+  }
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      loadUploadList();
+    });
+  }
+
+  // initial befüllen
+  loadUploadList().catch(console.error);
+}
 
   // ---- data fetchers ----
   async function loadPackageDetails(packageId) {
