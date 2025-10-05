@@ -12,4 +12,5 @@ urlpatterns = [
     path('package/', views.create_package, name='create_package'),  # POST               # POST (neu)
     path('category/', views.create_category, name='create_category'),
     path('category/<int:category_id>/', views.update_category, name='update_category'),
+    path('uploads/', views.list_uploads, name='uploads'),  # NEU
 ]

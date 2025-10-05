@@ -10,12 +10,13 @@ from django.http import JsonResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_GET
 from django.utils.dateparse import parse_date
 
 from .models import TreeNode, ExercisePackage
-from django.db import transaction
-
+from django.shortcuts import render
+from pathlib import Path
+from django.conf import settings
 
 # ------------------------------------------------------------
 # Helpers
@@ -76,10 +77,29 @@ def _duplicate_exists(name: str, parent_id, exclude_id=None) -> bool:
         qs = qs.exclude(pk=exclude_id)
     return qs.exists()
 
+def _list_upload_files():
+    """Interne Helper-Funktion – KEINE View!"""
+    d = Path(settings.UPLOADS_DIR)
+    d.mkdir(parents=True, exist_ok=True)
+    return sorted(p.name for p in d.iterdir() if p.is_file())
+
 
 # ------------------------------------------------------------
 # Read-Endpunkte für den Baum
 # ------------------------------------------------------------
+
+@require_GET
+def list_uploads(request):
+    """Öffentliche View, die von urls.py geroutet wird."""
+    return JsonResponse({"files": _list_upload_files()})
+
+def packages_page(request):
+    # … dein bisheriger Code/Context
+    ctx = {
+        # … bestehende Einträge
+        "upload_files": _list_upload_files(),  # << NEU
+    }
+    return render(request, "packages/pakete.html", ctx)
 
 def categories(request):
     """

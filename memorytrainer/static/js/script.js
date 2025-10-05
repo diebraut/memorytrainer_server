@@ -33,7 +33,6 @@
     }
   }
 
-
   // ---- utils ----
   function clearPathMarks() {
     document.querySelectorAll('.tree-panel li.path-ancestor, .tree-panel li.is-ancestor')
@@ -42,6 +41,23 @@
 
   function findLiById(id) {
     return document.querySelector(`.tree-panel li[data-id="${CSS.escape(String(id))}"]`);
+  }
+
+  async function loadUploadsIntoSelect(selectEl, preselectValue) {
+    if (!selectEl) return;
+    try {
+      const { files } = await fetchJSON(`${API_BASE}/uploads/`);
+      const opts = ['<option value="">— wählen —</option>']
+        .concat(files.map(f => `<option value="${f}">${f}</option>`));
+      selectEl.innerHTML = opts.join('');
+      if (preselectValue) {
+        const found = Array.from(selectEl.options).some(o => o.value === preselectValue);
+        if (found) selectEl.value = preselectValue;
+      }
+    } catch (e) {
+      console.error('Uploads laden fehlgeschlagen:', e);
+      selectEl.innerHTML = '<option value="">(keine Dateien gefunden)</option>';
+    }
   }
 
   /**
@@ -361,7 +377,7 @@
       const txt = await res.text().catch(()=> ''); throw new Error(`HTTP ${res.status}: ${url}\n${txt}`);
     }
     return res.json();
-    }
+  }
 
   // ---- package details (unten) ----
   async function createDetailPanel(packageData, level) {
@@ -443,6 +459,12 @@
             <textarea id="pkg-desc"
                       class="kt-input kt-input--editable"
                       rows="6"></textarea>
+            <label for="pkg-assign">Paketzuordnung</label>
+            <div>
+              <select id="pkg-assign">
+                <option value="">— laden —</option>
+              </select>
+            </div>                      
           </div>
     
           <div class="kt-actions" role="group" aria-label="Paket-Aktionen">
@@ -471,9 +493,11 @@
       discardBtn.dataset.action = 'discard';
       discardBtn.textContent = 'Verwerfen';
       actions.insertBefore(discardBtn, actions.firstChild);
-    }
-
-    host.appendChild(panel);
+   }
+   host.appendChild(panel);
+   const assignSel = panel.querySelector('#pkg-assign');
+   // Falls du später mal einen Wert mitliefern willst: packageData.assignment || ''
+   loadUploadsIntoSelect(assignSel, '');
   }
 
   // ---- data fetchers ----
