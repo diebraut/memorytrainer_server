@@ -13,4 +13,8 @@ urlpatterns = [
     path('category/', views.create_category, name='create_category'),
     path('category/<int:category_id>/', views.update_category, name='update_category'),
     path('uploads/', views.list_uploads, name='uploads'),  # NEU
+    path('package/<int:package_id>/assign/', views.package_assign, name='assign_package_file'),
+    path('package/<int:package_id>/unassign/', views.package_unassign, name='unassign_package_file'),
+    path('package/<int:package_id>/uploads/', views.package_uploads_for_pkg, name='package_uploads_for_pkg'),
+
 ]

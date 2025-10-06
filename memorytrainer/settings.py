@@ -9,12 +9,14 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# uploads-Verzeichnis definieren (robust)
-from pathlib import Path
-UPLOADS_DIR = (BASE_DIR / "data" / "uploads")
-if not UPLOADS_DIR.exists():
-    UPLOADS_DIR = (BASE_DIR.parent / "data" / "uploads")
+DATA_ROOT = Path(os.environ.get("MEMORYTRAINER_DATA_ROOT", str(BASE_DIR.parent / "data")))
+
+UPLOADS_DIR = DATA_ROOT / "uploads"
+ASSIGNED_PACKAGES_DIR = DATA_ROOT / "assigned-packages"
+
+# erzeugen, falls fehlend
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+ASSIGNED_PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-zkqox2%at$d80#$vbn^im7lmz%_7*%lwn()h$tox+!+4nnv2%k'

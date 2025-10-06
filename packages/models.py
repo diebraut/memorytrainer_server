@@ -31,16 +31,9 @@ class ExercisePackage(models.Model):
     treeNode = models.ForeignKey('packages.TreeNode', on_delete=models.CASCADE, related_name='exercise_packages')
 
     # NEU – Dateiauswahl aus ../data/uploads
-    packageAssignment = models.FilePathField(
-        path=str(settings.UPLOADS_DIR),          # s. settings.UPLOADS_DIR
-        match=r'.+\.(zip|xml|json)$',
-        recursive=False,
-        allow_files=True,
-        allow_folders=False,
-        max_length=512,
-        blank=True,
-        null=True,
-        verbose_name='Paketzurordnung',
+    packageAssignment = models.CharField(
+        max_length=255, blank=True, null=True,
+        help_text="Dateiname der zugeordneten Datei (im assigned-packages)"
     )
 
     class Meta:
