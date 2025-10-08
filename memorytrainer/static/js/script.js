@@ -1496,15 +1496,14 @@
             ? selectedElement
             : null;
 
-        const ancestorCatLi = document.querySelector('.tree-panel li.is-ancestor')
-            || (selectedElement && !selectedElement.getAttribute('data-type') ? selectedElement : null);
+        const ancestorCatLi =
+            (selectedElement && !selectedElement.getAttribute('data-type') ? selectedElement : null)
+            || document.querySelector('.tree-panel li.is-ancestor');
         const nodeId = ancestorCatLi ? ancestorCatLi.getAttribute('data-id') : null;
-
         if (!nodeId) {
             alert('Keine Unterkategorie (node) im Kontext.');
             return;
         }
-
         // Draft-ID
         const tmpId = `pkg-new-${Date.now()}`;
         const li = document.createElement('li');
