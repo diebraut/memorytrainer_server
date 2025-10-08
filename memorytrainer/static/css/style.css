@@ -516,3 +516,14 @@ h1 {
 }
 
 #pkg-assign { width: 100%; }
+
+/* sanftes Grün + kleine Markierung links */
+/* sanfte Kennzeichnung für zugeordnete Pakete */
+.tree-panel li.is-assigned > div,
+.tree-panel li.is-assigned.selected > div,
+.tree-panel li > div.assigned-row {
+  background-color: mediumseagreen !important;
+  border-left: 3px solid #3cb371;
+  border-radius: 8px;
+}
+

@@ -200,8 +200,11 @@
             packageLi.setAttribute('data-id', pkg.pk);
             packageLi.setAttribute('data-type', 'exercise-package');
             packageLi.setAttribute('data-parent-id', String(subId));
-            if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
+            if (typeof pkg.sort_order === 'number') {
+                packageLi.dataset.sortOrder = String(pkg.sort_order);    // <- fix
+            }
             packageLi.dataset.name = pkg.fields.packageName || '';
+            packageLi.classList.toggle('is-assigned', !!pkg.assignment);
 
             const packageContainer = document.createElement('div');
             packageContainer.style.display = "flex";
@@ -227,6 +230,10 @@
             }
 
             frag.appendChild(packageLi);
+            // Markierung wie oben doppelt setzen:
+            const assigned = !!pkg.assignment;
+            packageLi.classList.toggle('is-assigned', assigned);
+            packageContainer.classList.toggle('assigned-row', assigned);
         });
 
         // direkt unter die Kategorie hängen
@@ -596,6 +603,10 @@
                         const fresh = await loadPackageDetails(pkgId);
                         const lvl = parseInt(panel.getAttribute('data-level') || '0', 10);
                         await createDetailPanel(fresh, lvl);
+                        /* NEU: Baumzeile einfärben */
+                        const liInTree = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${pkgId}"]`);
+                        liInTree?.classList.add('is-assigned');
+                        liInTree?.firstElementChild?.classList.add('assigned-row');
                     } else {
                         console.warn('Assign HTTP', res.status, await res.text().catch(() => '')); // still
                     }
@@ -632,6 +643,10 @@
                         const fresh = await loadPackageDetails(pkgId);
                         const lvl = parseInt(panel.getAttribute('data-level') || '0', 10);
                         await createDetailPanel(fresh, lvl);
+                        /* NEU: Einfärbung entfernen */
+                        const liInTree = document.querySelector(`.tree-panel li[data-type="exercise-package"][data-id="${pkgId}"]`);
+                        liInTree?.classList.remove('is-assigned');
+                        liInTree?.firstElementChild?.classList.remove('assigned-row');
                     } else {
                         console.warn('Unassign HTTP', res.status, await res.text().catch(() => '')); // still
                     }
@@ -701,6 +716,7 @@
             return {
                 pk: p.id,
                 sort_order: Number.isFinite(so) ? so : idx, // fallback: aktuelle Reihenfolge
+                assignment: p.assignment ?? p.packageAssignment ?? null,   // <— NEU
                 fields: {
                     packageName: p.title ?? p.packageName ?? '',
                     packageDescription: p.desc ?? p.packageDescription ?? '',
@@ -959,11 +975,14 @@
                     if (pkgs.length > 0) {
                         const frag = document.createDocumentFragment();
                         pkgs.forEach(pkg => {
+// … innerhalb der pkgs.forEach(pkg => { … })
                             const packageLi = document.createElement('li');
                             packageLi.setAttribute('data-id', pkg.pk);
                             packageLi.setAttribute('data-type', 'exercise-package');
-                            packageLi.setAttribute('data-parent-id', String(item.pk));
-                            if (typeof pkg.sort_order === 'number') packageLi.dataset.sortOrder = String(pkg.sort_order);
+                            packageLi.setAttribute('data-parent-id', String(item.pk)); // bleibt hier korrekt
+                            if (typeof pkg.sort_order === 'number') {
+                                packageLi.dataset.sortOrder = String(pkg.sort_order);   // ← fix
+                            }
                             packageLi.dataset.name = pkg.fields.packageName || '';
 
                             const packageContainer = document.createElement('div');
@@ -979,13 +998,14 @@
                             const packageTextSpan = document.createElement('span');
                             packageTextSpan.textContent = pkg.fields.packageName;
 
-                            const meta = document.createElement('div');
-                            meta.className = 'row-meta';
-
                             packageContainer.appendChild(packageIconImg);
                             packageContainer.appendChild(packageTextSpan);
-                            packageContainer.appendChild(meta);
                             packageLi.appendChild(packageContainer);
+
+                            //Markierung setzen – auf <li> UND zusätzlich auf das innere <div>
+                            const assigned = !!pkg.assignment;
+                            packageLi.classList.toggle('is-assigned', assigned);
+                            packageContainer.classList.toggle('assigned-row', assigned);
 
                             // Klick auf Paket
                             packageLi.addEventListener('click', async (ev) => {

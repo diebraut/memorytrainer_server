@@ -11,7 +11,6 @@ from django.db.models import Count, F, Max
 from django.http import (
     JsonResponse,
     HttpResponseBadRequest,
-    HttpResponseNotAllowed,
 )
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -21,11 +20,13 @@ from django.views.decorators.http import require_http_methods, require_GET, requ
 
 from .models import TreeNode, ExercisePackage
 from .services import PackageFileManager
-
+import logging
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------
+
 # statt der alten Variante
 def _get_pkg_assignment(pkg):
     return pkg.packageAssignment or None
@@ -211,7 +212,7 @@ def get_details(request, category_id: int, subcategory_id: int):
         .filter(treeNode=node)
         .order_by("sort_order", "id")
         .values("id", "packageName", "packageDescription",
-                "createDate", "changeDate", "sort_order")
+                "createDate", "changeDate", "sort_order","packageAssignment")
     )
     items = [{
         "id": r["id"],
@@ -220,6 +221,7 @@ def get_details(request, category_id: int, subcategory_id: int):
         "created": r["createDate"],
         "changed": r["changeDate"],
         "sort_order": r["sort_order"],
+        "assignment": r["packageAssignment"],
     } for r in qs]
     return JsonResponse({"items": items})
 
@@ -247,14 +249,28 @@ def package_detail(request, package_id: int):
             "assignment": _get_pkg_assignment(pkg),  # <-- NEU
             "node": {"id": pkg.treeNode_id, "name": pkg.treeNode.text if pkg.treeNode_id else None},
         })
+
     if request.method == "DELETE":
         node_id = pkg.treeNode_id
         hole = pkg.sort_order
+
+        # Falls eine Datei zugeordnet ist: vor dem Löschen zurück nach uploads verschieben
+        try:
+            # Du kannst auch ohne if prüfen – der FileManager darf "kein Assignment" selbst abfangen.
+            if pkg.packageAssignment:
+                _filemgr.unassign_from_package(pkg.id)
+        except Exception as e:
+            # Löschung nicht blockieren, nur protokollieren
+            logger.warning("Unassign beim Löschen fehlgeschlagen (pkg=%s): %s", pkg.id, e)
+
+        # Paket löschen
         pkg.delete()
+
         # Sortierlücke schließen
         ExercisePackage.objects.filter(
             treeNode_id=node_id, sort_order__gt=hole
         ).update(sort_order=F("sort_order") - 1)
+
         return JsonResponse({"ok": True})
 
     # --- PATCH ---
