@@ -1,0 +1,4 @@
+<p>Hallo {{ username }},</p>
+<p>bitte bestätige deine Registrierung für MemoryTrainer:</p>
+<p><a href="{{ activation_url }}">{{ activation_url }}</a></p>
+<p>Wenn du dich nicht registriert hast, ignoriere diese E-Mail.</p>

@@ -1,0 +1,147 @@
+{% extends "landing/base.html" %}
+{% load static %}
+
+{% block title %}Anmelden oder registrieren{% endblock %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'css/login_register.css' %}?v=5">
+{% endblock %}
+
+{% block content %}
+    <div class="auth-shell">
+        <div class="auth-card">
+
+            {% if request.user.is_authenticated %}
+                {# ───────── Eingeloggter Benutzer ───────── #}
+                <header class="auth-header">
+                    <h1>Hallo, {{ request.user.get_short_name|default:request.user.username }}</h1>
+                    <p>Willkommen zurück beim Memorytrainer!</p>
+                </header>
+
+                <section class="profile-card styled" style="margin-top: 1.5rem">
+                    <div class="profile-grid">
+                        <div class="profile-row">
+                            <span class="profile-label">🧑 Benutzername</span>
+                            <span class="profile-value">{{ request.user.username }}</span>
+                        </div>
+                        <div class="profile-row">
+                            <span class="profile-label">📧 E-Mail</span>
+                            <span class="profile-value">{{ request.user.email|default:"—" }}</span>
+                        </div>
+                        <div class="profile-row">
+                            <span class="profile-label">🕐 Registriert am</span>
+                            <span class="profile-value">{{ request.user.date_joined|date:"d.m.Y, H:i" }}</span>
+                        </div>
+                        {% if request.user.last_login %}
+                            <div class="profile-row">
+                                <span class="profile-label">🔑 Letzter Login</span>
+                                <span class="profile-value">{{ request.user.last_login|date:"d.m.Y, H:i" }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 1.5rem">
+                        <form method="post" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="/"/>
+                            <button class="btn danger" type="submit">Abmelden</button>
+                        </form>
+                        <a class="btn" href="{% url 'landing:pakete' %}">Zu den Paketen</a>
+                    </div>
+                </section>
+
+            {% else %}
+                {# ───────── Nicht eingeloggt: Login / Registrierung ───────── #}
+                <header class="auth-header">
+                    <h1>Memorytrainer</h1>
+                    <p>Melde dich an – oder erstelle ein Konto</p>
+                </header>
+
+                {# Tabs #}
+                <div class="auth-tabs" role="tablist">
+                    <button type="button"
+                            class="tab-btn {% if not reg_form.errors %}active{% endif %}"
+                            data-tab="login">Anmelden
+                    </button>
+                    <button type="button"
+                            class="tab-btn {% if reg_form.errors %}active{% endif %}"
+                            data-tab="register">Registrieren
+                    </button>
+                </div>
+
+                {# Feedback-Messages #}
+                {% if messages %}
+                    <ul class="messages">
+                        {% for message in messages %}
+                            <li class="msg {{ message.tags|default:'info' }}">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                {# Tabs Inhalt #}
+                <div class="tab-content">
+                    <section id="tab-login" class="tab-pane {% if not reg_form.errors %}active{% endif %}">
+                        <form method="post" class="kt-form" novalidate>
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="login">
+                            <div class="form-grid">
+                                <div class="form-row">
+                                    {{ login_form.username.label_tag }}
+                                    {{ login_form.username }}
+                                    {{ login_form.username.errors }}
+                                </div>
+                                <div class="form-row">
+                                    {{ login_form.password.label_tag }}
+                                    {{ login_form.password }}
+                                    {{ login_form.password.errors }}
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" type="submit">Anmelden</button>
+                                <a class="link" href="{% url 'password_reset' %}">Passwort vergessen?</a>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section id="tab-register" class="tab-pane {% if reg_form.errors %}active{% endif %}">
+                        <form method="post" class="kt-form" novalidate>
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="register">
+                            <div class="form-grid">
+                                <div class="form-row">
+                                    {{ reg_form.trainee.label_tag }}
+                                    {{ reg_form.trainee }}
+                                    {{ reg_form.trainee.errors }}
+                                </div>
+                                <div class="form-row">
+                                    {{ reg_form.email.label_tag }}
+                                    {{ reg_form.email }}
+                                    {{ reg_form.email.errors }}
+                                </div>
+                                <div class="form-row">
+                                    {{ reg_form.password1.label_tag }}
+                                    {{ reg_form.password1 }}
+                                    {{ reg_form.password1.errors }}
+                                </div>
+                                <div class="form-row">
+                                    {{ reg_form.password2.label_tag }}
+                                    {{ reg_form.password2 }}
+                                    {{ reg_form.password2.errors }}
+                                </div>
+                            </div>
+                            <p class="muted">Nach der Registrierung erhältst du eine E-Mail zur Aktivierung.</p>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" type="submit">Konto erstellen</button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>window.API_BASE = "/api";</script>
+    {% block scripts %}
+        <script src="{% static 'js/login_register.js' %}?v=5"></script>
+    {% endblock %}
+{% endblock %}

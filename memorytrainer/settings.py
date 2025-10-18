@@ -89,16 +89,13 @@ TIME_ZONE = 'Europe/Berlin'      # <— optional, aber sinnvoll
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JS, Images)
 STATIC_URL = 'static/'
 
-# Prüfe, wo dein Ordner wirklich liegt:
 STATICFILES_DIRS = [
-    BASE_DIR / "memorytrainer" / "static",  # <— nur wenn dieser Ordner wirklich existiert!
-    # oder: BASE_DIR / "static"
+    BASE_DIR / "static",  # hier kommen DEINE Dateien rein (CSS, JS, Icons etc.)
 ]
 
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = BASE_DIR / "staticfiles"  # wird nur beim collectstatic verwendet
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -106,3 +103,14 @@ LOGIN_REDIRECT_URL = '/pakete/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 # optional:
 LOGIN_URL = '/accounts/login/'
+
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "noreply@example.com"
+
+#EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.yourprovider.tld"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = "smtp-user"
+EMAIL_HOST_PASSWORD = "smtp-password"
+#DEFAULT_FROM_EMAIL = "noreply@deine-domain.tld"
