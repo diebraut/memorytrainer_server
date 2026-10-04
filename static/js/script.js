@@ -7,6 +7,8 @@
     window.__KT_INIT__ = true;
 
     const API_BASE = (typeof window.API_BASE === "string" && window.API_BASE) ? window.API_BASE : "/api";
+    const STATIC_BASE = (typeof window.STATIC_BASE === "string" && window.STATIC_BASE) ? window.STATIC_BASE : "/static/";
+    const CAN_EDIT = window.CAN_EDIT === true;
 
     const treeContainer = document.getElementById('tree-container');
     if (!treeContainer) return;
@@ -212,7 +214,7 @@
             packageContainer.style.width = "100%";
 
             const packageIconImg = document.createElement('img');
-            packageIconImg.src = "/static/images/package_icon.webp";
+            packageIconImg.src = `${STATIC_BASE}images/package_icon.webp`;
             packageIconImg.alt = "Package Icon";
             packageIconImg.className = "knowledge-icon";
 
@@ -535,6 +537,13 @@
 
         host.appendChild(panel);
 
+        if (!CAN_EDIT) {
+            panel.querySelector('.kt-actions')?.remove();
+            panel.querySelector('.kt-file-row')?.remove();
+            panel.querySelectorAll('input, textarea').forEach(el => { el.readOnly = true; });
+            panel.querySelectorAll('button').forEach(el => el.remove());
+        }
+
         // -------- Upload-Liste (nur wenn NICHT zugeordnet) --------
         const fileListEl = panel.querySelector('#pkg-filelist');
         const refreshBtn = panel.querySelector('#btn-refresh-uploads');
@@ -618,7 +627,7 @@
             });
         }
 
-        if (fileListEl) loadUploadList().catch(console.error);
+        if (fileListEl && CAN_EDIT) loadUploadList().catch(console.error);
 
         // -------- „Zuordnung beenden“ (nur wenn zugeordnet) --------
         const unassignBtn = panel.querySelector('#btn-unassign');
@@ -834,6 +843,11 @@
         }
         host.appendChild(panel);
 
+        if (!CAN_EDIT) {
+            panel.querySelector('.kt-actions')?.remove();
+            panel.querySelectorAll('input, textarea').forEach(el => { el.readOnly = true; });
+        }
+
         // Draft: Insert-Buttons verbergen
         // Draft: Insert-Buttons & Löschen ausblenden, "Verwerfen" hinzufügen
         if (isDraft) {
@@ -878,7 +892,7 @@
             container.style.width = "100%";
 
             const iconImg = document.createElement('img');
-            iconImg.src = "/static/images/knowledge_icon.webp";
+            iconImg.src = `${STATIC_BASE}images/knowledge_icon.webp`;
             iconImg.alt = "Knowledge Icon";
             iconImg.className = "knowledge-icon";
 
@@ -991,7 +1005,7 @@
                             packageContainer.style.width = "100%";
 
                             const packageIconImg = document.createElement('img');
-                            packageIconImg.src = "/static/images/package_icon.webp";
+                            packageIconImg.src = `${STATIC_BASE}images/package_icon.webp`;
                             packageIconImg.alt = "Package Icon";
                             packageIconImg.className = "knowledge-icon";
 
@@ -1102,7 +1116,7 @@
         container.style.width = "100%";
 
         const iconImg = document.createElement('img');
-        iconImg.src = "/static/images/knowledge_icon.webp";
+        iconImg.src = `${STATIC_BASE}images/knowledge_icon.webp`;
         iconImg.alt = "Knowledge Icon";
         iconImg.className = "knowledge-icon";
 
@@ -1224,7 +1238,7 @@
         container.style.width = "100%";
 
         const iconImg = document.createElement('img');
-        iconImg.src = "/static/images/knowledge_icon.webp";
+        iconImg.src = `${STATIC_BASE}images/knowledge_icon.webp`;
         iconImg.alt = "Knowledge Icon";
         iconImg.className = "knowledge-icon";
 
@@ -1519,7 +1533,7 @@
         container.style.width = "100%";
 
         const iconImg = document.createElement('img');
-        iconImg.src = "/static/images/package_icon.webp";
+        iconImg.src = `${STATIC_BASE}images/package_icon.webp`;
         iconImg.alt = "Package Icon";
         iconImg.className = "knowledge-icon";
 

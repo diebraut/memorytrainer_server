@@ -11,11 +11,10 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.core.mail import send_mail
+from django.urls import reverse
 
 
 from .forms import RegisterForm
-
-LOGIN_REDIRECT = "/pakete/"
 
 @require_http_methods(["GET", "POST"])
 def login_register(request):
@@ -27,7 +26,7 @@ def login_register(request):
         if login_form.is_valid():
             user = login_form.get_user()
             login(request, user)
-            return redirect(LOGIN_REDIRECT)
+            return redirect("landing:pakete")
         messages.error(request, "Anmeldung fehlgeschlagen.")
 
     # --- Registrierung ---
@@ -52,7 +51,9 @@ def login_register(request):
             # Aktivierungslink bauen
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            activation_url = request.build_absolute_uri(f"/activate/{uid}/{token}/")
+            activation_url = request.build_absolute_uri(
+                reverse("activate", kwargs={"uidb64": uid, "token": token})
+            )
 
             # E-Mail senden (Text + optional HTML)
             subject = "Bitte Registrierung bestätigen"

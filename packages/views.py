@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from functools import wraps
 from datetime import date
 from pathlib import Path
 
@@ -15,13 +16,21 @@ from django.http import (
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
 
 from .models import TreeNode, ExercisePackage
 from .services import PackageFileManager
 import logging
 logger = logging.getLogger(__name__)
+
+
+def staff_only(view):
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return JsonResponse({"error": "Admin-Anmeldung erforderlich"}, status=403)
+        return view(request, *args, **kwargs)
+    return wrapped
 
 # ------------------------------------------------------------
 # Helpers
@@ -96,6 +105,7 @@ def _list_upload_files():
 _filemgr = PackageFileManager()
 
 
+@staff_only
 @require_GET
 def uploads_listing(request):
     """
@@ -104,11 +114,13 @@ def uploads_listing(request):
     """
     return JsonResponse({"files": _filemgr.list_uploads()})
 
+@staff_only
 @require_GET
 def list_uploads(request):
     """Liste der Dateien im Upload-Ordner (für /api/uploads/)."""
     return JsonResponse({"files": _filemgr.list_uploads()})
 
+@staff_only
 @require_GET
 def package_uploads_for_pkg(request, package_id: int):
     """
@@ -118,6 +130,7 @@ def package_uploads_for_pkg(request, package_id: int):
     return JsonResponse({"files": _filemgr.list_uploads()})
 
 
+@staff_only
 @require_POST
 def package_assign(request, package_id: int):
     try:
@@ -135,6 +148,7 @@ def package_assign(request, package_id: int):
         return JsonResponse({"error": str(e)}, status=400)
 
 
+@staff_only
 @require_POST
 def package_unassign(request, package_id: int):
     try:
@@ -230,9 +244,10 @@ def get_details(request, category_id: int, subcategory_id: int):
 # Paket-Detail: GET / PATCH / DELETE
 # ------------------------------------------------------------
 
-@csrf_exempt
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def package_detail(request, package_id: int):
+    if request.method != "GET" and (not request.user.is_authenticated or not request.user.is_staff):
+        return JsonResponse({"error": "Admin-Anmeldung erforderlich"}, status=403)
     try:
         pkg = ExercisePackage.objects.select_related('treeNode').get(pk=package_id)
     except ExercisePackage.DoesNotExist:
@@ -407,6 +422,7 @@ def package_detail(request, package_id: int):
 # Paket anlegen (inkl. Position "davor/danach")
 # ------------------------------------------------------------
 
+@staff_only
 @require_http_methods(["POST"])
 @transaction.atomic
 def create_package(request):
@@ -470,7 +486,7 @@ def create_package(request):
 # Kategorie anlegen / aktualisieren / löschen
 # ------------------------------------------------------------
 
-@csrf_exempt
+@staff_only
 @require_http_methods(["POST"])
 def create_category(request):
     """
@@ -534,7 +550,7 @@ def create_category(request):
     return JsonResponse(_serialize_node(node, with_counts=True), status=201)
 
 
-@csrf_exempt
+@staff_only
 @require_http_methods(["PATCH", "DELETE"])
 def update_category(request, category_id: int):
     """

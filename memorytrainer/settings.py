@@ -19,12 +19,32 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 ASSIGNED_PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-zkqox2%at$d80#$vbn^im7lmz%_7*%lwn()h$tox+!+4nnv2%k'
+SECRET_KEY = os.environ.get("MEMORYTRAINER_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("MEMORYTRAINER_DEBUG", "true").lower() in ("1", "true", "yes")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "development-only-memorytrainer-key"
+    else:
+        raise RuntimeError("MEMORYTRAINER_SECRET_KEY must be set in production")
 
-ALLOWED_HOSTS = []  # für Dev okay; sonst z.B. ["localhost","127.0.0.1"]
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get(
+    "MEMORYTRAINER_ALLOWED_HOSTS", "localhost,127.0.0.1"
+).split(",") if host.strip()]
+FORCE_SCRIPT_NAME = os.environ.get("MEMORYTRAINER_SCRIPT_NAME", "").rstrip("/") or None
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get(
+    "MEMORYTRAINER_CSRF_TRUSTED_ORIGINS", ""
+).split(",") if origin.strip()]
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_PATH = f"{FORCE_SCRIPT_NAME}/" if FORCE_SCRIPT_NAME else "/"
+CSRF_COOKIE_PATH = SESSION_COOKIE_PATH
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if os.environ.get("MEMORYTRAINER_TRUST_PROXY_SSL", "false").lower() in ("1", "true", "yes")
+    else None
+)
 
 # Application definition
 INSTALLED_APPS = [
@@ -71,7 +91,7 @@ WSGI_APPLICATION = 'memorytrainer.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': str(BASE_DIR / 'db.sqlite3'),
+        'NAME': os.environ.get("MEMORYTRAINER_DB_PATH", str(BASE_DIR / 'db.sqlite3')),
     }
 }
 
@@ -95,22 +115,22 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",  # hier kommen DEINE Dateien rein (CSS, JS, Icons etc.)
 ]
 
-STATIC_ROOT = BASE_DIR / "staticfiles"  # wird nur beim collectstatic verwendet
+STATIC_ROOT = Path(os.environ.get("MEMORYTRAINER_STATIC_ROOT", str(BASE_DIR / "staticfiles")))
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-LOGIN_REDIRECT_URL = '/pakete/'
-LOGOUT_REDIRECT_URL = '/accounts/login/'
-# optional:
-LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = 'landing:pakete'
+LOGOUT_REDIRECT_URL = 'login_register'
+LOGIN_URL = 'login_register'
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "noreply@example.com"
-
-#EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.yourprovider.tld"
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = "smtp-user"
-EMAIL_HOST_PASSWORD = "smtp-password"
-#DEFAULT_FROM_EMAIL = "noreply@deine-domain.tld"
+EMAIL_BACKEND = os.environ.get(
+    "MEMORYTRAINER_EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend" if DEBUG
+    else "django.core.mail.backends.smtp.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = os.environ.get("MEMORYTRAINER_FROM_EMAIL", "noreply@roland-prinz.de")
+EMAIL_HOST = os.environ.get("MEMORYTRAINER_EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("MEMORYTRAINER_EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.environ.get("MEMORYTRAINER_EMAIL_USE_TLS", "true").lower() in ("1", "true", "yes")
+EMAIL_HOST_USER = os.environ.get("MEMORYTRAINER_EMAIL_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("MEMORYTRAINER_EMAIL_PASSWORD", "")

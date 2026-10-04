@@ -27,7 +27,9 @@
 
   <script>
     // API-Basis des neuen Projekts (für das Tree-Script)
-    window.API_BASE = "/api";
+    window.API_BASE = "{% url 'packages_api:categories' %}".replace(/categories\/$/, "").replace(/\/$/, "");
+    window.STATIC_BASE = "{% static '' %}";
+    window.CAN_EDIT = {% if user.is_authenticated and user.is_staff %}true{% else %}false{% endif %};
   </script>
   <script src="{% static 'js/script.js' %}?v=3"></script>
 {% endblock %}
