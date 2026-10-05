@@ -1,0 +1,79 @@
+{% extends "landing/base.html" %}
+
+{% block title %}Hochgeladene Pakete – Memorytrainer{% endblock %}
+
+{% block head %}
+<style>
+    .uploaded-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+    .uploaded-header h1 { margin: 0; }
+    .uploaded-panel { margin-top: 18px; }
+    .uploaded-form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+    .uploaded-form label { display: grid; gap: 8px; color: var(--muted); }
+    .uploaded-form input { max-width: 100%; color: var(--text); }
+    .uploaded-form input::file-selector-button { margin-right: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: #0b1220; color: var(--text); cursor: pointer; }
+    .uploaded-table-wrap { overflow-x: auto; }
+    .uploaded-table { width: 100%; border-collapse: collapse; text-align: left; }
+    .uploaded-table th, .uploaded-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); }
+    .uploaded-table th { color: var(--muted); font-weight: 600; }
+    .uploaded-table td:first-child { overflow-wrap: anywhere; }
+    .uploaded-table td:last-child { width: 1%; white-space: nowrap; }
+    .uploaded-delete { border-color: #7f1d1d; color: #fecaca; }
+    .uploaded-message { padding: 10px 14px; margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; }
+    .uploaded-message.error { border-color: #7f1d1d; color: #fecaca; }
+    .uploaded-message.success { border-color: #166534; color: #bbf7d0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="uploaded-header">
+    <div>
+        <h1 class="title">Hochgeladene Pakete</h1>
+        <p class="lead">Dateien im Ordner UploadedPackages verwalten</p>
+    </div>
+    <a class="btn" href="{% url 'login_register' %}">Zurück zum Profil</a>
+</div>
+
+{% for message in messages %}
+    <div class="uploaded-message {{ message.tags }}" role="status">{{ message }}</div>
+{% endfor %}
+
+<section class="panel uploaded-panel">
+    <h2>Paket hochladen</h2>
+    <form class="uploaded-form" method="post" action="{% url 'landing:upload_package' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label>Paketdatei (ZIP, XML oder JSON; maximal 512 MB)
+            <input type="file" name="package_file" accept=".zip,.xml,.json" required>
+        </label>
+        <button class="btn" type="submit">Hochladen</button>
+    </form>
+</section>
+
+<section class="panel uploaded-panel">
+    <h2>Vorhandene Dateien ({{ files|length }})</h2>
+    {% if files %}
+        <div class="uploaded-table-wrap">
+            <table class="uploaded-table">
+                <thead><tr><th>Dateiname</th><th>Größe</th><th>Geändert am</th><th>Aktion</th></tr></thead>
+                <tbody>
+                {% for file in files %}
+                    <tr>
+                        <td>{{ file.name }}</td>
+                        <td>{{ file.size|filesizeformat }}</td>
+                        <td>{{ file.modified|date:"d.m.Y H:i" }}</td>
+                        <td>
+                            <form method="post" action="{% url 'landing:delete_uploaded_package' %}" onsubmit="return confirm('Diese Paketdatei wirklich löschen?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="filename" value="{{ file.name }}">
+                                <button class="btn uploaded-delete" type="submit" aria-label="{{ file.name }} löschen">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="lead">Noch keine Pakete hochgeladen.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -13,6 +13,7 @@ DATA_ROOT = Path(os.environ.get("MEMORYTRAINER_DATA_ROOT", str(BASE_DIR.parent /
 
 UPLOADS_DIR = DATA_ROOT / "uploads"
 ASSIGNED_PACKAGES_DIR = DATA_ROOT / "assigned-packages"
+UPLOADED_PACKAGES_DIR = DATA_ROOT / "UploadedPackages"
 
 # erzeugen, falls fehlend
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

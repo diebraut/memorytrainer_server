@@ -47,6 +47,9 @@
                             <button class="btn danger" type="submit">Abmelden</button>
                         </form>
                         <a class="btn" href="{% url 'landing:pakete' %}">Zu den Paketen</a>
+                        {% if request.user.is_staff %}
+                            <a class="btn" href="{% url 'landing:uploaded_packages' %}">Zeige hochgeladene Pakete</a>
+                        {% endif %}
                     </div>
                 </section>
 
